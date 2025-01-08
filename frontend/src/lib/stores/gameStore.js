@@ -31,4 +31,48 @@ function createGameStore() {
   };
 }
 
+
+function createUserStore() {
+  const { subscribe, set, update } = writable(null);
+
+  return {
+    subscribe,
+    set,
+    update,
+    init: async () => {
+      try {
+        if (localStorage.getItem('token')) {
+          const user = await api.getCurrentUser();
+          set(user);
+        }
+      } catch (error) {
+        console.error('Failed to initialize user:', error);
+        localStorage.removeItem('token');
+        set(null);
+      }
+    },
+    login: async (email, password) => {
+      await api.login(email, password);
+      const user = await api.getCurrentUser();
+      set(user);
+    },
+    register: async (email, password, fullName, nickname) => {
+      await api.register(email, password, fullName, nickname);
+      const user = await api.getCurrentUser();
+      set(user);
+    },
+    logout: () => {
+      api.logout();
+      set(null);
+    },
+    updateProfile: async (data) => {
+      const updatedUser = await api.updateProfile(data);
+      set(updatedUser);
+      return updatedUser;
+    }
+  };
+}
+
+
+export const userStore = createUserStore();
 export const gameStore = createGameStore();

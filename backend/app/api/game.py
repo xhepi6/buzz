@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException
 from typing import List, Optional
 from uuid import UUID
+
 from app.models.game import Game
 from app.services.game_service import GameService
+from fastapi import APIRouter, HTTPException
 
 router = APIRouter()
 

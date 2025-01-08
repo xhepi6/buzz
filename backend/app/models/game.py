@@ -1,6 +1,8 @@
-from pydantic import BaseModel, Field
 from typing import Optional
 from uuid import UUID, uuid4
+
+from pydantic import BaseModel, Field
+
 
 class GameBase(BaseModel):
     name: str
@@ -14,7 +16,15 @@ class GameBase(BaseModel):
 
 
 class Game(GameBase):
-    id: UUID = Field(default_factory=uuid4)
+    id: str
+    name: str
+    description: str
+    min_players: int
+    max_players: int
+    category: str
+    duration_minutes: int
+    thumbnail_url: str
+    image_url: str
 
     class Config:
         json_schema_extra = {

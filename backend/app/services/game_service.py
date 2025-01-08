@@ -1,31 +1,32 @@
-from uuid import UUID
 from typing import List, Optional
-from app.core.redis import redis_client
+from bson import ObjectId
+from app.core.mongodb import mongodb
 from app.models.game import Game
-
-GAMES_KEY = "games"
 
 class GameService:
     @staticmethod
     async def get_games(category: Optional[str] = None) -> List[Game]:
-        redis = redis_client.redis
-        games_data = await redis.hgetall(GAMES_KEY)
-        games = [Game.model_validate_json(game_json) for game_json in games_data.values()]
-        
-        if category:
-            games = [game for game in games if game.category == category]
-        
+        query = {"category": category} if category else {}
+        cursor = mongodb.db.games.find(query)
+        games = []
+        async for game_doc in cursor:
+            # Convert ObjectId to string for the id field
+            game_doc["id"] = str(game_doc.pop("_id"))
+            games.append(Game(**game_doc))
         return games
 
     @staticmethod
-    async def get_game(game_id: UUID) -> Optional[Game]:
-        redis = redis_client.redis
-        game_data = await redis.hget(GAMES_KEY, str(game_id))
-        if game_data:
-            return Game.model_validate_json(game_data)
+    async def get_game(game_id: str) -> Optional[Game]:
+        try:
+            game_doc = await mongodb.db.games.find_one({"_id": ObjectId(game_id)})
+            if game_doc:
+                game_doc["id"] = str(game_doc.pop("_id"))
+                return Game(**game_doc)
+        except:
+            pass
         return None
 
     @staticmethod
     async def get_categories() -> List[str]:
-        games = await GameService.get_games()
-        return list(set(game.category for game in games))
+        categories = await mongodb.db.games.distinct("category")
+        return categories
