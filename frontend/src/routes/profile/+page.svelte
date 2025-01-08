@@ -1,4 +1,8 @@
 <!-- frontend/src/routes/profile/+page.svelte -->
+<svelte:head>
+  <title>Buzz! - Profile</title>
+</svelte:head>
+
 <script>
   import { onMount } from 'svelte';
   import { userStore } from '$lib/stores/userStore';

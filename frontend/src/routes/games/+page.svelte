@@ -35,7 +35,10 @@
   });
 </script>
 
-<title>Buzz! - Games</title>
+<svelte:head>
+  <title>Buzz! - Games</title>
+</svelte:head>
+
 <div class="min-h-screen bg-cyber-bg bg-gradient-to-b from-cyber-bg to-cyber-bg/50 pt-20">
   <div class="container mx-auto px-4">
     <!-- Header Section -->

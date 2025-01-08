@@ -30,7 +30,9 @@
   });
 </script>
 
-<title>Buzz!</title>
+<svelte:head>
+  <title>Buzz!</title>
+</svelte:head>
 
 <div class="min-h-screen bg-cyber-bg bg-gradient-to-b from-cyber-bg to-cyber-bg/50">
   <!-- Hero Section -->

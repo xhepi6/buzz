@@ -61,7 +61,9 @@
   });
 </script>
 
-<title>Buzz! - Lobby</title>
+<svelte:head>
+  <title>Buzz! - Lobby</title>
+</svelte:head>
 
 <div class="min-h-screen bg-cyber-bg bg-gradient-to-b from-cyber-bg to-cyber-bg/50 pt-20">
   {#if loading}
