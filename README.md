@@ -37,7 +37,12 @@ buzz/
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
+# Using HTTPS
+git clone https://github.com/xhepi6/buzz.git
+
+# Or using SSH
+git clone git@github.com:xhepi6/buzz.git
+
 cd buzz
 ```
 
