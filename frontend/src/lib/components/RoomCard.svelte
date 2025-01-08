@@ -1,12 +1,12 @@
 <script>
     export let room;
     export let onJoin = () => {};
-  
+
     function handleJoin() {
       onJoin(room.id);
     }
   </script>
-  
+
   <div class="card bg-base-100/50 backdrop-blur shadow-xl">
     <div class="card-body">
       <h2 class="card-title text-primary">{room.name}</h2>

@@ -10,10 +10,10 @@
 <div class="card bg-base-100/50 backdrop-blur shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105 animate-glow">
   <figure class="px-4 pt-4">
     {#if game.thumbnail_url}
-      <img 
+      <img
         src={`${API_URL}${game.thumbnail_url}`}
-        alt={game.name} 
-        class="rounded-xl h-48 w-full object-cover" 
+        alt={game.name}
+        class="rounded-xl h-48 w-full object-cover"
       />
     {/if}
   </figure>

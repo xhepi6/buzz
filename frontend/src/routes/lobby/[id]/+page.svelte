@@ -32,9 +32,9 @@
 
   function handleSendMessage() {
     if (newMessage.trim()) {
-      messages = [...messages, { 
-        id: Date.now(), 
-        text: newMessage, 
+      messages = [...messages, {
+        id: Date.now(),
+        text: newMessage,
         sender: 'You',
         timestamp: new Date().toLocaleTimeString()
       }];
@@ -87,13 +87,13 @@
                   <h2 class="card-title text-2xl text-primary">Cyber Room #1337</h2>
                   <div class="badge badge-secondary mt-2">{game.name}</div>
                 </div>
-                <img 
+                <img
                   src={`${API_URL}${game.image_url}`}
                   alt={game.name}
-                  class="w-32 h-32 object-cover rounded-lg border border-primary/20" 
+                  class="w-32 h-32 object-cover rounded-lg border border-primary/20"
                 />
               </div>
-              
+
               <!-- Game Status -->
               <div class="mt-4 flex flex-wrap gap-4">
                 <div class="stat bg-base-300/30 rounded-box p-4 flex-1">
@@ -140,14 +140,14 @@
                 <button class="btn btn-secondary" on:click={() => showSettingsModal = true}>
                   Settings
                 </button>
-                <button 
-                  class="btn btn-accent animate-glow" 
+                <button
+                  class="btn btn-accent animate-glow"
                   on:click={handleReady}
                 >
                   Toggle Ready
                 </button>
-                <button 
-                  class="btn btn-primary animate-glow" 
+                <button
+                  class="btn btn-primary animate-glow"
                   disabled={!players.every(p => p.ready)}
                 >
                   Start Game
@@ -161,7 +161,7 @@
         <div class="card bg-base-100/50 backdrop-blur shadow-xl border border-primary/20 h-[600px]">
           <div class="card-body p-4 flex flex-col">
             <h3 class="text-xl font-bold text-primary mb-4">Room Chat</h3>
-            
+
             <div class="flex-1 overflow-y-auto space-y-4 mb-4">
               {#each messages as message}
                 <div class="chat chat-{message.sender === 'You' ? 'end' : 'start'}">
@@ -174,16 +174,16 @@
                 </div>
               {/each}
             </div>
-            
+
             <div class="join w-full">
-              <input 
-                type="text" 
-                placeholder="Type a message..." 
+              <input
+                type="text"
+                placeholder="Type a message..."
                 class="input input-bordered join-item w-full bg-base-300/30 border-primary/50 text-primary"
                 bind:value={newMessage}
                 on:keypress={e => e.key === 'Enter' && handleSendMessage()}
               />
-              <button 
+              <button
                 class="btn btn-primary join-item"
                 on:click={handleSendMessage}
               >
@@ -213,22 +213,22 @@
             <option>Custom</option>
           </select>
         </div>
-        
+
         <div class="form-control">
           <label class="label">
             <span class="label-text text-primary">Round Time (minutes)</span>
           </label>
-          <input 
-            type="number" 
-            min="1" 
-            max="10" 
+          <input
+            type="number"
+            min="1"
+            max="10"
             value="3"
             class="input input-bordered bg-base-300/50 border-primary/50 text-primary"
           />
         </div>
       </div>
       <div class="modal-action">
-        <button 
+        <button
           class="btn btn-ghost text-primary"
           on:click={() => showSettingsModal = false}
         >

@@ -40,7 +40,7 @@
       <div class="absolute w-96 h-96 bg-cyber-primary/20 rounded-full blur-3xl -top-20 -left-20 animate-float"></div>
       <div class="absolute w-96 h-96 bg-cyber-secondary/20 rounded-full blur-3xl -bottom-20 -right-20 animate-float" style="animation-delay: -3s;"></div>
     </div>
-    
+
     <div class="hero-content text-center z-10">
       <div class="max-w-md">
         <h1 class="text-6xl font-bold mb-8 tracking-wider">
@@ -49,9 +49,9 @@
           <span class="text-cyber-accent">HUB</span>
         </h1>
         <p class="mb-8 text-lg text-cyber-primary/80">Unite, play, and outsmart in social deduction and trivia games.</p>
-        
+
         <div class="join join-vertical sm:join-horizontal w-full gap-2">
-          <input 
+          <input
             class="input input-bordered input-lg join-item w-full bg-cyber-bg/50 border-cyber-primary text-cyber-primary placeholder-cyber-primary/50"
             placeholder="Enter Room Code"
             bind:value={roomCode}
@@ -60,11 +60,11 @@
             Join Room
           </button>
         </div>
-        
+
         <div class="divider text-cyber-primary/50">OR</div>
-        
-        <button 
-          class="btn btn-secondary btn-lg w-full sm:w-64 animate-glow" 
+
+        <button
+          class="btn btn-secondary btn-lg w-full sm:w-64 animate-glow"
           on:click={() => showCreateModal = true}
         >
           Create Room
@@ -79,7 +79,7 @@
       <span class="text-cyber-primary">Featured</span>
       <span class="text-cyber-secondary">Games</span>
     </h2>
-    
+
     {#if loadingFeaturedGames}
       <div class="flex justify-center items-center py-12">
         <span class="loading loading-spinner loading-lg text-cyber-primary"></span>

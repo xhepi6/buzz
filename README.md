@@ -1,125 +1,165 @@
+# Buzz! - Social Gaming Platform
 
-
-# Buzz!
-
-Buzz! is a modern web application built with a FastAPI backend and a SvelteKit frontend. It utilizes Docker Compose for streamlined development and deployment.
+A modern web application for social gaming, built with FastAPI (backend) and SvelteKit (frontend). The project uses Docker for containerization and MongoDB for data storage.
 
 ## Project Structure
-
 ```
-Buzz/
-├── backend/              # FastAPI backend application
-├── frontend/             # SvelteKit frontend application
-├── docker/               # Dockerfiles for backend and frontend
-├── docker-compose.yaml   # Docker Compose configuration
-├── .env                  # Environment variables (excluded from version control)
-├── .env.example          # Example environment variables (included in repo)
-├── .gitignore            # Git ignore file
-├── .pre-commit-config.yaml # Pre-commit hooks configuration
+buzz/
+├── backend/
+│   ├── app/
+│   │   ├── api/         # API endpoints
+│   │   ├── core/        # Core configurations
+│   │   ├── models/      # Pydantic models
+│   │   ├── services/    # Business logic
+│   │   └── static/      # Static files
+│   ├── scripts/         # Utility scripts
+│   └── requirements.txt # Python dependencies
+├── frontend/
+│   ├── src/            # SvelteKit source code
+│   ├── static/         # Static assets
+│   ├── package.json    # Node.js dependencies
+│   ├── tailwind.config.js
+│   └── vite.config.js
+├── docker/
+│   ├── backend.Dockerfile
+│   ├── frontend.Dockerfile
+│   └── mongo-init.js   # MongoDB initialization script
+└── docker-compose.yaml
 ```
 
 ## Prerequisites
 
-- [Docker](https://www.docker.com/) and [Docker Compose](https://docs.docker.com/compose/) installed.
-- Node.js and Yarn for local frontend development (optional).
+- Docker and Docker Compose
+- Node.js 18+ (for local frontend development)
+- Python 3.10+ (for local backend development)
 
-## Getting Started
+## Quick Start
 
 1. Clone the repository:
-
-   ```bash
-   git clone https://github.com/your-username/buzz.git
-   cd buzz
-   ```
-
-2. Copy the `.env.example` file to create a `.env` file:
-
-   ```bash
-   cp .env.example .env
-   ```
-
-3. Modify the `.env` file to suit your environment. The `.env.example` file provides a starting point.
-
-4. Start the services using Docker Compose:
-
-   ```bash
-   docker-compose up --build
-   ```
-
-5. Access the application:
-
-   - Backend: [http://localhost:8000](http://localhost:8000)
-   - Frontend: [http://localhost:3000](http://localhost:3000)
-
-## Backend
-
-The backend is built with FastAPI and is configured with the following dependencies:
-
-### Dependencies
-
-- `fastapi>=0.104.0`
-- `uvicorn>=0.24.0`
-- `aioredis>=2.0.1`
-- `pydantic>=2.4.2`
-- `pydantic-settings>=2.0.3`
-- `python-dotenv>=1.0.0`
-
-### Development Commands
-
-Run the backend locally:
-
 ```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+git clone <repository-url>
+cd buzz
 ```
 
-## Frontend
-
-The frontend is built with SvelteKit and uses Vite as its build tool.
-
-### Scripts
-
-- `dev`: Run the development server.
-- `build`: Build the application for production.
-- `preview`: Preview the production build.
-
-Run the frontend locally:
-
+2. Create environment files:
 ```bash
-yarn install
-yarn dev
+# Root environment file
+cp .env.example .env
+
+# Frontend environment file
+cp frontend/.env.example frontend/.env
 ```
 
-## Environment Variables
+3. Start the application:
+```bash
+docker compose up --build
+```
 
-The environment variables are managed in a `.env` file. Ensure you set the following variables:
+The services will be available at:
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:8000
+- Backend API Docs: http://localhost:8000/docs
 
+## Environment Configuration
+
+### Root `.env`
 ```env
-# Redis configuration
-REDIS_HOST=redis
-REDIS_PORT=6379
+# JWT Settings
+JWT_SECRET_KEY=your-secret-key-please-change-in-production
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
 
-# Frontend configuration
+# MongoDB Settings
+MONGODB_URL=mongodb://root:example@mongodb:27017
+MONGODB_DB=buzzdb
+
+# CORS Settings
+CORS_ORIGINS=["http://localhost:3000","http://localhost:3001"]
+
+# MongoDB Root Credentials
+MONGO_INITDB_ROOT_USERNAME=root
+MONGO_INITDB_ROOT_PASSWORD=example
+```
+
+### Frontend `.env`
+```env
 VITE_API_URL=http://localhost:8000
 ```
 
-## Pre-commit Hooks
+## Development
 
-This project uses `pre-commit` hooks for code linting and formatting. Install the hooks:
+### Backend (FastAPI)
 
+Key dependencies:
+- FastAPI 0.104.0+
+- Motor 3.3.0+ (MongoDB async driver)
+- Pydantic 2.4.2+
+- Python-Jose (JWT)
+- Uvicorn
+
+For local development:
 ```bash
-pre-commit install
+cd backend
+python -m venv venv
+source venv/bin/activate  # or `venv\Scripts\activate` on Windows
+pip install -r requirements.txt
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Run the hooks manually:
+### Frontend (SvelteKit)
 
+Key features:
+- SvelteKit
+- TailwindCSS
+- ESLint
+- Vite
+
+For local development:
 ```bash
-pre-commit run --all-files
+cd frontend
+npm install
+npm run dev
 ```
+
+## Docker Setup
+
+The project uses three Docker containers:
+- `frontend`: SvelteKit application
+- `backend`: FastAPI application
+- `mongodb`: MongoDB database
+
+Build and start:
+```bash
+docker compose up --build
+```
+
+Stop and remove volumes:
+```bash
+docker compose down -v
+```
+
+## Database
+
+MongoDB is automatically initialized with sample games data through `docker/mongo-init.js`. The database name is configured as `buzzdb`.
+
+## Available Games
+
+The application comes with pre-configured games:
+- Mafia (6-12 players)
+- Spyfall (4-8 players)
+
+Games can be modified by editing `docker/mongo-init.js`.
+
+## API Documentation
+
+Once the backend is running, API documentation is available at:
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
 
 ## Contributing
 
-1. Fork the repository.
-2. Create a feature branch.
-3. Commit your changes.
-4. Open a pull request.
-
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request

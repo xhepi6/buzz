@@ -26,7 +26,7 @@
     await loadGames(category);
   }
 
-  $: filteredGames = games.filter(game => 
+  $: filteredGames = games.filter(game =>
     game.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -57,8 +57,8 @@
           class="input input-bordered w-full bg-cyber-bg/50 border-cyber-primary text-cyber-primary"
         />
       </div>
-      
-      <select 
+
+      <select
         bind:value={selectedCategory}
         on:change={handleCategoryChange}
         class="select select-bordered bg-cyber-bg/50 border-cyber-primary text-cyber-primary"

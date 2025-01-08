@@ -35,6 +35,9 @@ dist/
 dump.rdb
 redis_data/
 
+# MongoDB
+mongodb_data/
+
 # Docker
 *.swp
 *.swo

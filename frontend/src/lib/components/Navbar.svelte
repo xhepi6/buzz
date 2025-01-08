@@ -3,7 +3,7 @@
 
   let isDarkMode = true;
   let showAuthModal = false;
-  
+
   function toggleTheme() {
     isDarkMode = !isDarkMode;
     document.documentElement.setAttribute('data-theme', isDarkMode ? 'cyberpunk' : 'light');

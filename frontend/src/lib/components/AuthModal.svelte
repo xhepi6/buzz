@@ -5,7 +5,7 @@
   const dispatch = createEventDispatcher();
 
   export let isOpen = false;
-  
+
   let isLogin = true;
   let email = '';
   let password = '';
@@ -39,7 +39,7 @@
         />
       </div>
     {/if}
-    
+
     <div class="form-control">
       <input
         type="email"
@@ -49,7 +49,7 @@
         required
       />
     </div>
-    
+
     <div class="form-control">
       <input
         type="password"
@@ -77,7 +77,7 @@
         </svg>
         Continue with Google
       </button>
-      
+
       <button
         type="button"
         class="btn btn-outline w-full"
@@ -101,4 +101,4 @@
       </button>
     </p>
   </form>
-</Modal> 
+</Modal>
