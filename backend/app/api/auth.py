@@ -2,69 +2,79 @@ from fastapi import APIRouter, HTTPException, Depends
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from typing import Optional
 from datetime import datetime, timedelta
+import os
 from jose import JWTError, jwt
-from passlib.context import CryptContext
-from pydantic import BaseModel
+
+from app.models.user import UserCreate, User, UserUpdate
+from app.services.auth_service import UserService
 
 router = APIRouter()
 
 # Configuration
-SECRET_KEY = "your-secret-key"  # Change this to a secure secret key
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-class UserCreate(BaseModel):
-    email: str
-    password: str
-    name: Optional[str] = None
-
-class User(BaseModel):
-    email: str
-    name: Optional[str]
 
 def create_access_token(data: dict):
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-@router.post("/register", response_model=Token)
-async def register(user: UserCreate):
-    # TODO: Add your user creation logic here
-    # Check if user exists
-    # Hash password
-    # Save user to database
-    
-    access_token = create_access_token({"sub": user.email})
-    return {"access_token": access_token, "token_type": "bearer"}
-
-@router.post("/token", response_model=Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    # TODO: Add your authentication logic here
-    # Verify user credentials
-    # Generate token
-    
-    access_token = create_access_token({"sub": form_data.username})
-    return {"access_token": access_token, "token_type": "bearer"}
-
-@router.get("/me", response_model=User)
-async def get_current_user(token: str = Depends(oauth2_scheme)):
+async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
+    credentials_exception = HTTPException(
+        status_code=401,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
         if email is None:
-            raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+            raise credentials_exception
     except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+        raise credentials_exception
+
+    user = await UserService.get_user_by_email(email)
+    if user is None:
+        raise credentials_exception
+
+    return User(**user.model_dump(exclude={"hashed_password"}))
+
+@router.post("/register")
+async def register(user: UserCreate):
+    try:
+        user_db = await UserService.create_user(user)
+        access_token = create_access_token({"sub": user_db.email})
+        return {"access_token": access_token, "token_type": "bearer"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.post("/token")
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    user = await UserService.get_user_by_email(form_data.username)
+    if not user or not UserService.verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     
-    # TODO: Get user from database
-    # Return user data
-    return {"email": email, "name": "Test User"} 
+    access_token = create_access_token({"sub": user.email})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@router.get("/me", response_model=User)
+async def get_current_user_profile(current_user: User = Depends(get_current_user)):
+    return current_user
+
+@router.put("/profile", response_model=User)
+async def update_user_profile(
+    user_update: UserUpdate,
+    current_user: User = Depends(get_current_user)
+):
+    updated_user = await UserService.update_user(current_user.id, user_update)
+    if not updated_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return User(**updated_user.model_dump(exclude={"hashed_password"}))
