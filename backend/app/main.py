@@ -1,11 +1,11 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from app.core.config import settings
-from app.core.redis import redis_client
-from app.api import game
-from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
+from app.api import game_router, auth_router, room_router
+from app.core.config import settings
+from app.core.mongodb import mongodb
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="Buzz API")
 
@@ -22,12 +22,14 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(game.router, tags=["games"])
+app.include_router(game_router, tags=["games"])
+app.include_router(auth_router, tags=["auth"])
+app.include_router(room_router, tags=["room"])
 
 @app.on_event("startup")
-async def startup_event():
-    await redis_client.init_redis()
+async def startup_db_client():
+    await mongodb.connect_db()
 
 @app.on_event("shutdown")
-async def shutdown_event():
-    await redis_client.close_redis()
+async def shutdown_db_client():
+    await mongodb.close_db()

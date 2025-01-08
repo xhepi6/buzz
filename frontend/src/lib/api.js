@@ -1,17 +1,21 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 async function fetchApi(endpoint, options = {}) {
+  const token = localStorage.getItem('token');
+  
   try {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` }),
         ...options.headers,
       },
     });
 
     if (!response.ok) {
-      throw new Error(`API Error: ${response.statusText}`);
+      const error = await response.json();
+      throw new Error(error.detail || 'An error occurred');
     }
 
     return await response.json();
@@ -22,6 +26,54 @@ async function fetchApi(endpoint, options = {}) {
 }
 
 export const api = {
+  // Authentication
+  login: async (email, password) => {
+    const formData = new URLSearchParams();
+    formData.append('username', email);
+    formData.append('password', password);
+
+    const response = await fetchApi('/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: formData,
+    });
+
+    localStorage.setItem('token', response.access_token);
+    return response;
+  },
+
+  register: async (email, password, fullName, nickname) => {
+    const response = await fetchApi('/register', {
+      method: 'POST',
+      body: JSON.stringify({ 
+        email, 
+        password, 
+        full_name: fullName,
+        nickname 
+      }),
+    });
+
+    localStorage.setItem('token', response.access_token);
+    return response;
+  },
+
+  getCurrentUser: async () => {
+    return await fetchApi('/me');
+  },
+
+  updateProfile: async (data) => {
+    return await fetchApi('/profile', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  logout: () => {
+    localStorage.removeItem('token');
+  },
+
   // Games
   getGames: async (category = null) => {
     const url = category ? `/games?category=${category}` : '/games';
@@ -36,7 +88,7 @@ export const api = {
     return await fetchApi('/categories');
   },
 
-  // Room management (to be implemented with WebSocket)
+  // Room management
   createRoom: async (gameId, playerName) => {
     return await fetchApi('/rooms', {
       method: 'POST',
@@ -44,33 +96,22 @@ export const api = {
     });
   },
 
-  // Authentication
-  login: async (email, password) => {
-    const formData = new URLSearchParams();
-    formData.append('username', email);
-    formData.append('password', password);
-
-    return await fetchApi('/token', {
+  joinRoom: async (roomId, playerName) => {
+    return await fetchApi(`/rooms/${roomId}/join`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: formData,
+      body: JSON.stringify({ playerName }),
     });
   },
 
-  register: async (email, password, name) => {
-    return await fetchApi('/register', {
-      method: 'POST',
-      body: JSON.stringify({ email, password, name }),
-    });
+  // Game state management
+  getGameState: async (roomId) => {
+    return await fetchApi(`/rooms/${roomId}/state`);
   },
 
-  getCurrentUser: async () => {
-    return await fetchApi('/me', {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('token')}`,
-      },
-    });
-  },
+  // WebSocket connection helper
+  getWebSocketUrl: (roomId) => {
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsHost = import.meta.env.VITE_WS_URL || `${wsProtocol}//${window.location.host}`;
+    return `${wsHost}/ws/${roomId}`;
+  }
 };
