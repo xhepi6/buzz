@@ -17,9 +17,10 @@ class Settings(BaseSettings):
         "http://localhost:3001"
     ]
     
-    class Config:
-        env_file = ".env"
-        extra = "allow"
+    model_config = {
+        "env_file": ".env",
+        "extra": "allow"
+    }
 
 @lru_cache()
 def get_settings():

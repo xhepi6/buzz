@@ -48,6 +48,9 @@ docker-compose.override.yml
 .vscode/
 *.code-workspace
 
+# Pycharm
+.idea
+
 # macOS
 .DS_Store
 

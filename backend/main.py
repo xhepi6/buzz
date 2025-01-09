@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from app.api import game_router, auth_router, room_router
-from app.core.config import settings
-from app.core.mongodb import mongodb
+from api import game_router, auth_router, room_router
+from core.config import settings
+from core.mongodb import mongodb
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles

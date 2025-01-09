@@ -5,8 +5,8 @@ from datetime import datetime, timedelta
 import os
 from jose import JWTError, jwt
 
-from app.models.user import UserCreate, User, UserUpdate
-from app.services.auth_service import UserService
+from models.user import UserCreate, User, UserUpdate
+from services.auth_service import UserService
 
 router = APIRouter()
 

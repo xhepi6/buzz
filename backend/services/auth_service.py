@@ -1,8 +1,8 @@
 from typing import Optional
 from uuid import UUID
 from passlib.context import CryptContext
-from app.models.user import UserInDB, UserCreate, UserUpdate
-from app.core.mongodb import mongodb
+from models.user import UserInDB, UserCreate, UserUpdate
+from core.mongodb import mongodb
 
 pwd_context = CryptContext(
     schemes=["bcrypt"],

@@ -1,7 +1,6 @@
 from typing import List, Optional
-from uuid import UUID
-from app.models.game import Game
-from app.services.game_service import GameService
+from models.game import Game
+from services.game_service import GameService
 from fastapi import APIRouter, HTTPException
 
 router = APIRouter()
@@ -17,13 +16,6 @@ async def get_game(game_id: str):
         raise HTTPException(status_code=404, detail="Game not found")
     return game
 
-@router.get("/games/by-slug/{slug}", response_model=Game)
-async def get_game_by_slug(slug: str):
-    game = await GameService.get_game_by_slug(slug)
-    if not game:
-        raise HTTPException(status_code=404, detail="Game not found")
-    return game
-
 @router.get("/categories", response_model=List[str])
 async def get_categories():
-    return await GameService.get_categories() 
+    return await GameService.get_categories()
