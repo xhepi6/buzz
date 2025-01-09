@@ -4,10 +4,9 @@ services:
     build:
       context: ./backend
       dockerfile: ../docker/backend.Dockerfile
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
       - ./backend:/app
-      - ./backend/app/static:/app/app/static
+      - ./backend/static:/app/static
     ports:
       - "8000:8000"
     depends_on:
