@@ -1,9 +1,23 @@
 <script>
+  import { userStore } from '$lib/stores/userStore';
+  import AuthModal from './AuthModal.svelte';
+
   export let game;
   const API_URL = import.meta.env.VITE_API_URL;
+  
+  let showAuthModal = false;
+  let user = null;
 
+  userStore.subscribe(value => {
+    user = value;
+  });
+  
   function handleSelect() {
-    window.location.href = `/lobby/new?game=${game.id}`;
+    if (!user) {
+      showAuthModal = true;
+      return;
+    }
+    window.location.href = `/games/${game.slug}/setup`;
   }
 </script>
 
@@ -27,8 +41,14 @@
     <p class="text-base-content/80">{game.description}</p>
     <div class="card-actions justify-end mt-4">
       <button class="btn btn-primary" on:click={handleSelect}>
-        Select Game
+        Create Game
       </button>
     </div>
   </div>
 </div>
+
+<AuthModal
+  isOpen={showAuthModal}
+  message="You need to login first to create a game room."
+  on:close={() => showAuthModal = false}
+/>

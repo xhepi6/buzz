@@ -2,9 +2,9 @@
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
   import GameCard from '$lib/components/GameCard.svelte';
+  import { goto } from '$app/navigation';
 
   let roomCode = '';
-  let showCreateModal = false;
 
   const API_URL = import.meta.env.VITE_API_URL;
 
@@ -17,12 +17,16 @@
   async function loadFeaturedGames() {
     try {
       loadingFeaturedGames = true;
-      featuredGames = await api.getGames(); // Update this to fetch only featured games if the API supports it
+      featuredGames = await api.getGames();
     } catch (err) {
       featuredGamesError = err.message;
     } finally {
       loadingFeaturedGames = false;
     }
+  }
+
+  function handleCreateRoom() {
+    goto('/games');
   }
 
   onMount(() => {
@@ -67,7 +71,7 @@
 
         <button
           class="btn btn-secondary btn-lg w-full sm:w-64 animate-glow"
-          on:click={() => showCreateModal = true}
+          on:click={handleCreateRoom}
         >
           Create Room
         </button>
@@ -92,7 +96,7 @@
       </div>
     {:else if featuredGames.length > 0}
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {#each featuredGames as game}
+        {#each featuredGames as game (game.slug)}
           <GameCard {game} />
         {/each}
       </div>
