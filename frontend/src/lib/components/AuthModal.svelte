@@ -8,6 +8,7 @@
   const dispatch = createEventDispatcher();
 
   export let isOpen = false;
+  export let message = '';
   
   let isLogin = true;
   let email = '';
@@ -66,6 +67,12 @@
 
 <Modal {isOpen} {onClose} title={isLogin ? 'Login' : 'Sign Up'}>
   <form class="space-y-4" on:submit|preventDefault={handleSubmit}>
+    {#if message}
+      <div class="alert alert-info shadow-lg">
+        <span>{message}</span>
+      </div>
+    {/if}
+
     {#if error}
       <div class="alert alert-error shadow-lg">
         <span>{error}</span>
