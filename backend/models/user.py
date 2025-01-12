@@ -16,7 +16,7 @@ class UserUpdate(BaseModel):
     password: Optional[str] = None
 
 class UserInDB(UserBase):
-    id: UUID = uuid4()
+    id: UUID
     hashed_password: str
 
 class User(UserBase):

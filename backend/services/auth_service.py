@@ -1,5 +1,5 @@
 from typing import Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 from passlib.context import CryptContext
 from models.user import UserInDB, UserCreate, UserUpdate
 from core.mongodb import mongodb
@@ -23,7 +23,7 @@ class UserService:
     async def get_user_by_email(email: str) -> Optional[UserInDB]:
         user_doc = await mongodb.db.users.find_one({"email": email})
         if user_doc:
-            user_doc["id"] = str(user_doc.pop("_id"))
+            user_doc["id"] = user_doc.pop("_id")
             return UserInDB(**user_doc)
         return None
 
@@ -34,8 +34,9 @@ class UserService:
         if existing_user:
             raise ValueError("Email already registered")
 
-        # Create new user
+        # Create new user with generated UUID
         user_db = UserInDB(
+            id=uuid4(),
             email=user_create.email,
             full_name=user_create.full_name,
             nickname=user_create.nickname,
@@ -45,7 +46,12 @@ class UserService:
         # Store user data
         user_dict = user_db.model_dump()
         user_dict["_id"] = str(user_dict.pop("id"))
-        await mongodb.db.users.insert_one(user_dict)
+        
+        try:
+            await mongodb.db.users.insert_one(user_dict)
+        except Exception as e:
+            print(f"Error creating user: {e}")
+            raise ValueError("Failed to create user")
         
         return user_db
 
@@ -63,6 +69,6 @@ class UserService:
         )
 
         if result:
-            result["id"] = str(result.pop("_id"))
+            result["id"] = result.pop("_id")
             return UserInDB(**result)
         return None
