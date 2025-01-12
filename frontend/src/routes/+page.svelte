@@ -3,10 +3,20 @@
   import { api } from '$lib/api';
   import GameCard from '$lib/components/GameCard.svelte';
   import { goto } from '$app/navigation';
+  import { userStore } from '$lib/stores/userStore';
+  import AuthModal from '$lib/components/AuthModal.svelte';
+  import { toastStore } from '$lib/stores/toastStore';
 
   let roomCode = '';
+  let error = null;
+  let user = null;
+  let showAuthModal = false;
+  let showError = false;
 
-  const API_URL = import.meta.env.VITE_API_URL;
+  // Subscribe to user store
+  userStore.subscribe(value => {
+    user = value;
+  });
 
   // Initialize `featuredGames` as an empty array
   let featuredGames = [];
@@ -25,12 +35,52 @@
     }
   }
 
+  async function handleJoinRoom() {
+    try {
+      error = null;
+      
+      // Check if room code is provided
+      if (!roomCode.trim()) {
+        toastStore.warning("Please enter a room code");
+        return;
+      }
+
+      // Check if user is authenticated
+      if (!user) {
+        showAuthModal = true;
+        return;
+      }
+
+      // Verify room exists before joining
+      try {
+        const room = await api.getRoom(roomCode);
+        goto(`/rooms/${roomCode}`);
+      } catch (err) {
+        if (err.message.includes('404') || err.message.includes('not found')) {
+          toastStore.warning("Room not found. Please check the room code and try again.");
+        } else {
+          toastStore.error("Failed to join room. Please try again.");
+        }
+      }
+    } catch (err) {
+      toastStore.error(err.message);
+    }
+  }
+
   function handleCreateRoom() {
     goto('/games');
   }
 
+  // Auto-hide error after 3 seconds
+  $: if (showError) {
+    setTimeout(() => {
+      showError = false;
+    }, 3000);
+  }
+
   onMount(() => {
     loadFeaturedGames();
+    userStore.init();
   });
 </script>
 
@@ -62,7 +112,10 @@
             placeholder="Enter Room Code"
             bind:value={roomCode}
           />
-          <button class="btn btn-primary btn-lg join-item animate-glow">
+          <button 
+            class="btn btn-primary btn-lg join-item animate-glow"
+            on:click={handleJoinRoom}
+          >
             Join Room
           </button>
         </div>
@@ -107,3 +160,9 @@
     {/if}
   </div>
 </div>
+
+<AuthModal
+  isOpen={showAuthModal}
+  message="You need to login first to join a game room."
+  on:close={() => showAuthModal = false}
+/>
