@@ -369,114 +369,74 @@ class RoomService:
                 try:
                     mafia_players = MafiaService.assign_roles(room)
                     game_state = MafiaService.create_game_state(mafia_players)
-                    
-                    print(f"💾 Updating room state in database")
-                    # Update room with game state
-                    result = await mongodb.db.rooms.update_one(
-                        {"code": room_code},
-                        {"$set": {
-                            "room_state": "in_game",
-                            "game_state": game_state
-                        }}
-                    )
-                    
-                    if result.modified_count == 0:
-                        raise ValueError("Failed to update room state")
-                    
-                    print(f"📢 Broadcasting game start")
-                    # Broadcast game started to all players
-                    await manager.broadcast_to_lobby(
-                        room_code,
-                        {
-                            "type": "game_started",
-                            "game_type": room.game_type,
-                            "room_code": room.code
-                        }
-                    )
-                    
-                    print(f"📨 Sending individual role information")
-                    # Send individual role information
-                    for player in mafia_players:
-                        try:
-                            role_info = player.role_info.model_dump()
-                            # Only convert to value if it's an Enum
-                            if isinstance(role_info.get('role'), MafiaRole):
-                                role_info['role'] = role_info['role'].value
-                                
-                            print(f"  -> Sending role to {player.nickname}: {role_info}")
-                            await manager.send_to_user(
-                                room_code,
-                                player.user_id,
-                                {
-                                    "type": "game_update",
-                                    "event": "role_assigned",
-                                    "player_id": player.user_id,
-                                    "role_info": role_info
-                                },
-                                'lobby'  # Send through lobby connection since game connection isn't established yet
-                            )
-                        except Exception as e:
-                            print(f"❌ Error sending role to {player.nickname}: {str(e)}")
-                            raise
-                    
-                    return await RoomService.get_room(room_code)
-                    
                 except Exception as e:
                     print(f"❌ Error in Mafia game initialization: {str(e)}")
                     raise ValueError(f"Failed to initialize Mafia game: {str(e)}")
             elif room.game_type == "spyfall":
                 print(f"🎲 Initializing Spyfall game")
                 try:
-                    spyfall_players, location = SpyfallService.assign_roles(room)
+                    spyfall_players, location = await SpyfallService.assign_roles(room)
                     game_state = SpyfallService.create_game_state(
                         spyfall_players,
                         location,
                         room.game_config.get("roundMinutes", 8)
                     )
-                    
-                    # Update room with game state
-                    result = await mongodb.db.rooms.update_one(
-                        {"code": room_code},
-                        {"$set": {
-                            "room_state": "in_game",
-                            "game_state": game_state
-                        }}
-                    )
-                    
-                    if result.modified_count == 0:
-                        raise ValueError("Failed to update room state")
-                    
-                    # Broadcast game started
-                    await manager.broadcast_to_lobby(
-                        room_code,
-                        {
-                            "type": "game_started",
-                            "game_type": room.game_type,
-                            "room_code": room.code
-                        }
-                    )
-                    
-                    # Send individual role information
-                    for player in spyfall_players:
-                        await manager.send_to_user(
-                            room_code,
-                            player.user_id,
-                            {
-                                "type": "game_update",
-                                "event": "role_assigned",
-                                "player_id": player.user_id,
-                                "role_info": player.role_info.model_dump()
-                            },
-                            'lobby'
-                        )
-                    
-                    return await RoomService.get_room(room_code)
-                    
                 except Exception as e:
                     print(f"❌ Error in Spyfall game initialization: {str(e)}")
                     raise ValueError(f"Failed to initialize Spyfall game: {str(e)}")
             else:
                 raise ValueError(f"Unsupported game type: {room.game_type}")
+            
+            # Update room with game state
+            result = await mongodb.db.rooms.update_one(
+                {"code": room_code},
+                {"$set": {
+                    "room_state": "in_game",
+                    "game_state": game_state
+                }}
+            )
+            
+            if result.modified_count == 0:
+                raise ValueError("Failed to update room state")
+            
+            print(f"📢 Broadcasting game start")
+            # Broadcast game started to all players
+            await manager.broadcast_to_lobby(
+                room_code,
+                {
+                    "type": "game_started",
+                    "game_type": room.game_type,
+                    "room_code": room.code
+                }
+            )
+            
+            print(f"📨 Sending individual role information")
+            # Send individual role information
+            players_to_notify = mafia_players if room.game_type == "mafia" else spyfall_players
+            for player in players_to_notify:
+                try:
+                    role_info = player.role_info.model_dump()
+                    # Only convert to value if it's an Enum
+                    if role_info and role_info.get('role'):
+                        role_info['role'] = role_info['role'].value
+                        
+                    print(f"  -> Sending role to {player.nickname}: {role_info}")
+                    await manager.send_to_user(
+                        room_code,
+                        player.user_id,
+                        {
+                            "type": "game_update",
+                            "event": "role_assigned",
+                            "player_id": player.user_id,
+                            "role_info": role_info
+                        },
+                        'lobby'  # Send through lobby connection since game connection isn't established yet
+                    )
+                except Exception as e:
+                    print(f"❌ Error sending role to {player.nickname}: {str(e)}")
+                    raise
+            
+            return await RoomService.get_room(room_code)
             
         except Exception as e:
             print(f"❌ Error in start_game: {str(e)}")

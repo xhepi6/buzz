@@ -1,24 +1,42 @@
 from typing import List, Dict
 from random import shuffle, choice
-from models.spyfall import SpyfallPlayer, SpyfallRole, SpyfallRoleInfo, DEFAULT_LOCATIONS
+from models.spyfall import SpyfallPlayer, SpyfallRole, SpyfallRoleInfo
 from models.room import Room
 from datetime import datetime, timedelta
+from services.game_service import GameService
 
 class SpyfallService:
     @staticmethod
-    def assign_roles(room: Room) -> tuple[List[SpyfallPlayer], str]:
+    async def assign_roles(room: Room) -> tuple[List[SpyfallPlayer], str]:
         """Assign roles to players and select location"""
         try:
             print(f"🎲 Setting up Spyfall game for room {room.code}")
+            
+            # Get game data for location images
+            game = await GameService.get_game("spyfall")
+            if not game:
+                raise ValueError("Spyfall game configuration not found")
+                
+            print(f"🎮 Game data received:", game.model_dump())
             
             # Get game configuration
             spy_count = room.game_config.get("spyCount", 1)
             use_custom_locations = room.game_config.get("useCustomLocations", False)
             custom_locations = room.game_config.get("customLocations", [])
             
-            # Select location
-            locations = custom_locations if use_custom_locations and custom_locations else DEFAULT_LOCATIONS
+            # Get available locations from game data
+            available_locations = list(game.locations.keys())
+            locations = custom_locations if use_custom_locations and custom_locations else available_locations
             selected_location = choice(locations)
+            print(f"📍 Selected location: {selected_location}")
+            
+            # Get location image if available
+            location_image = game.locations.get(selected_location) if game.locations else None
+            print(f"🎯 Selected location image: {location_image}")
+            
+            if not location_image:
+                print(f"⚠️ No image found for location {selected_location}")
+                print(f"⚠️ Available locations: {available_locations}")
             
             # Prepare player list
             players = list(room.players)
@@ -48,9 +66,18 @@ class SpyfallService:
                     role_info=SpyfallRoleInfo(
                         role=SpyfallRole.REGULAR,
                         location=selected_location,
+                        location_image=location_image,
                         description=f"You are at the {selected_location}. Find the spy!"
                     )
                 ))
+            
+            # Debug log for role assignments
+            for player in spyfall_players:
+                print(f"🎭 Role assigned to {player.nickname}:", {
+                    "role": player.role_info.role,
+                    "location": player.role_info.location,
+                    "has_image": bool(player.role_info.location_image)
+                })
             
             shuffle(spyfall_players)  # Shuffle again to hide spy positions
             return spyfall_players, selected_location
