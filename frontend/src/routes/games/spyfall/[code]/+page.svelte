@@ -4,26 +4,12 @@
   import { userStore } from '$lib/stores/userStore';
   import { websocketStore } from '$lib/stores/websocketStore';
   import { api } from '$lib/api';
+  import { browser } from '$app/environment';
+
+  export const ssr = false;  // Disable SSR for game page
 
   let allLocations = [];
-  let locationImages = {};  // Store location images mapping
-
-  // Get API URL from environment
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-
-  function getFullImageUrl(path) {
-    if (!path) return null;
-    // If it's already a full URL, return it
-    if (path.startsWith('http')) return path;
-    // If it starts with /static, prepend the API URL
-    if (path.startsWith('/static')) {
-      const fullUrl = `${API_URL}${path}`;
-      console.log('🔍 Building full URL:', fullUrl);
-      return fullUrl;
-    }
-    return path;
-  }
-
+  let locationImages = {};
   let loading = true;
   let error = null;
   let user = null;
@@ -33,14 +19,28 @@
   let roundEndTime = null;
   let timeRemaining = '';
   let timerInterval = null;
-  let connectionAttempts = 0;
-  const MAX_ATTEMPTS = 3;
+
+  // Get API URL from environment
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+  function getFullImageUrl(path) {
+    if (!path) return null;
+    if (path.startsWith('http')) return path;
+    if (path.startsWith('/static')) {
+      return `${API_URL}${path}`;
+    }
+    return path;
+  }
+
+  // Add image loading state
+  let imageLoading = true;
+  let imageError = false;
+  let debugImageData = null;
 
   // Fetch all locations when component mounts
   async function fetchLocations() {
     try {
       const game = await api.getGame('spyfall');
-      // Store both location names and their image paths
       locationImages = game.locations;
       allLocations = Object.keys(locationImages).sort();
     } catch (err) {
@@ -48,44 +48,12 @@
     }
   }
 
-  let userPromise = new Promise((resolve) => {
-    userStore.subscribe(value => {
-      user = value;
-      if (value) resolve(value);
-    });
-  });
-
   function updateTimeRemaining() {
     if (!roundEndTime) return;
     
     const now = new Date();
     const end = new Date(roundEndTime);
-    const endUTC = new Date(Date.UTC(
-      end.getUTCFullYear(),
-      end.getUTCMonth(),
-      end.getUTCDate(),
-      end.getUTCHours(),
-      end.getUTCMinutes(),
-      end.getUTCSeconds()
-    ));
-    
-    const nowUTC = new Date(Date.UTC(
-      now.getUTCFullYear(),
-      now.getUTCMonth(),
-      now.getUTCDate(),
-      now.getUTCHours(),
-      now.getUTCMinutes(),
-      now.getUTCSeconds()
-    ));
-    
-    const diff = endUTC.getTime() - nowUTC.getTime();
-    console.log('Time check:', {
-      now: now.toISOString(),
-      nowUTC: nowUTC.toISOString(),
-      end: end.toISOString(),
-      endUTC: endUTC.toISOString(),
-      diff
-    });
+    const diff = end.getTime() - now.getTime();
     
     if (diff <= 0) {
       timeRemaining = "Time is up!";
@@ -104,11 +72,6 @@
     if (timerInterval) {
       clearInterval(timerInterval);
     }
-    console.log('Starting timer:', {
-      endTime,
-      currentTime: new Date().toISOString(),
-      timezoneOffset: new Date().getTimezoneOffset()
-    });
     roundEndTime = endTime;
     updateTimeRemaining();
     timerInterval = setInterval(updateTimeRemaining, 1000);
@@ -118,215 +81,181 @@
     try {
       loading = true;
       await api.restartGame($page.params.code);
-      window.location.href = `/rooms/${$page.params.code}`;
+      // The WebSocket handler will handle the redirect
     } catch (err) {
       error = err.message;
       loading = false;
     }
   }
 
-  async function connectAndListen() {
+  function loadImage(url) {
     try {
-      if (connectionAttempts >= MAX_ATTEMPTS) {
-        error = "Failed to connect after multiple attempts";
-        loading = false;
-        return;
-      }
-
-      try {
-        roomData = await api.getRoom($page.params.code);
-        isHost = roomData.host === user?.id;
-        if (roomData?.game_state?.round_end_time) {
-          console.log('Initial timer setup:', {
-            serverTime: roomData.game_state.round_end_time,
-            localTime: new Date().toISOString(),
-            diff: new Date(roomData.game_state.round_end_time) - new Date()
-          });
-          startTimer(roomData.game_state.round_end_time);
-        }
-      } catch (err) {
-        console.error('❌ Error getting room data:', err);
-      }
-
-      connectionAttempts++;
-      await websocketStore.connect($page.params.code, 'game');
-
-      websocketStore.setMessageHandler((data) => {
-        if (data.type === 'game_update' && data.event === 'role_assigned') {
-          if (data.player_id === user?.id) {
-            console.log('📦 Received role info:', data.role_info);
-            console.log('🖼️ Location image path:', data.role_info.location_image);
-            roleInfo = data.role_info;
-            if (roleInfo.location_image) {
-              console.log('🔄 Loading image from:', getFullImageUrl(roleInfo.location_image));
-              loadImage(getFullImageUrl(roleInfo.location_image));
-            } else {
-              console.warn('⚠️ No location image in role info');
-            }
-            loading = false;
-          }
-        }
+        console.log('🔄 Loading image:', url);
+        imageLoading = true;
+        imageError = false;
         
-        if (data.type === 'room_update') {
-          roomData = data.room;
-          isHost = roomData.host === user?.id;
-          
-          if (data.room?.game_state?.players) {
-            if (data.room?.game_state?.round_end_time) {
-              console.log('⏰ Updating timer with new end time:', data.room.game_state.round_end_time);
-              startTimer(data.room.game_state.round_end_time);
-            }
-            const playerGameState = data.room.game_state.players.find(
-              p => p.user_id === user?.id
-            );
-            
-            if (playerGameState?.role_info) {
-              roleInfo = playerGameState.role_info;
-              loading = false;
-            }
-          }
+        if (!url) {
+            console.warn('⚠️ No image URL provided');
+            imageError = true;
+            imageLoading = false;
+            return;
         }
 
-        if (data.type === 'game_ended') {
-          if (timerInterval) {
-            clearInterval(timerInterval);
-            timeRemaining = '';
-          }
-          window.location.href = `/rooms/${$page.params.code}`;
-        }
-      });
-
+        const img = new Image();
+        img.onload = () => {
+            console.log('✅ Image loaded successfully');
+            debugImageData = {
+                url: url,
+                size: 'loaded',
+                type: 'image',
+                originalUrl: url
+            };
+            imageLoading = false;
+        };
+        img.onerror = (err) => {
+            console.error('❌ Image load error:', err);
+            imageError = true;
+            imageLoading = false;
+        };
+        img.src = url;
     } catch (err) {
-      console.error('❌ Error in game page:', err);
-      if (connectionAttempts < MAX_ATTEMPTS) {
-        setTimeout(connectAndListen, 2000);
-      } else {
-        error = err.message;
-        loading = false;
-      }
+        console.error('❌ Error in loadImage:', err);
+        imageError = true;
+        imageLoading = false;
     }
   }
 
   onMount(async () => {
     try {
-      loading = true;
-      await userPromise;
-      await fetchLocations();
-      
-      if (!user) {
-        error = "User not authenticated";
+        loading = true;
+        
+        // Wait for user data with proper unsubscribe handling
+        const userData = await new Promise((resolve) => {
+            let unsubscribe = () => {};  // Initialize with empty function
+            
+            const handleUser = (value) => {
+                if (value) {
+                    unsubscribe();  // Clean up subscription
+                    resolve(value);
+                }
+            };
+            
+            // Set up subscription and store unsubscribe function
+            unsubscribe = userStore.subscribe(handleUser);
+        });
+
+        // Set user after promise resolves
+        user = userData;
+        
+        // Get cached game state
+        const cachedState = sessionStorage.getItem('gameState');
+        if (cachedState) {
+            const gameState = JSON.parse(cachedState);
+            if (gameState.players) {
+                const playerState = gameState.players.find(p => p.user_id === user?.id);
+                if (playerState?.role_info) {
+                    roleInfo = playerState.role_info;
+                    if (roleInfo.location_image) {
+                        loadImage(getFullImageUrl(roleInfo.location_image));
+                    }
+                    if (gameState.round_end_time) {
+                        startTimer(gameState.round_end_time);
+                    }
+                }
+            }
+        }
+
+        // If no role info from cache, try to get it from the room state
+        if (!roleInfo) {
+            try {
+                const room = await api.getRoom($page.params.code);
+                if (room.game_state?.players) {
+                    const playerState = room.game_state.players.find(p => p.user_id === user?.id);
+                    if (playerState?.role_info) {
+                        roleInfo = playerState.role_info;
+                        if (roleInfo.location_image) {
+                            loadImage(getFullImageUrl(roleInfo.location_image));
+                        }
+                        if (room.game_state.round_end_time) {
+                            startTimer(room.game_state.round_end_time);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to get room state:', err);
+            }
+        }
+
+        // Fetch locations for reference
+        await fetchLocations();
+
+        // Connect to WebSocket
+        await websocketStore.connect($page.params.code);
+        
+        // Set up message handler
+        websocketStore.setMessageHandler((data) => {
+            if (data.type === 'game_update') {
+                if (data.event === 'role_assigned' && data.player_id === user?.id) {
+                    roleInfo = data.role_info;
+                    if (roleInfo.location_image) {
+                        loadImage(getFullImageUrl(roleInfo.location_image));
+                    }
+                    if (data.game_state?.round_end_time) {
+                        startTimer(data.game_state.round_end_time);
+                    }
+                }
+            } else if (data.type === 'room_update' && data.room?.game_state?.players) {
+                roomData = data.room;
+                isHost = roomData.host === user?.id;
+                
+                // Update role info if not already set
+                if (!roleInfo) {
+                    const playerState = data.room.game_state.players.find(p => p.user_id === user?.id);
+                    if (playerState?.role_info) {
+                        roleInfo = playerState.role_info;
+                        if (roleInfo.location_image) {
+                            loadImage(getFullImageUrl(roleInfo.location_image));
+                        }
+                        if (data.room.game_state.round_end_time) {
+                            startTimer(data.room.game_state.round_end_time);
+                        }
+                    }
+                }
+            }
+        });
+
         loading = false;
-        return;
-      }
-      
-      await connectAndListen();
-      
-      // Verify image once roleInfo is available
-      if (roleInfo?.location_image) {
-        await verifyImage(getFullImageUrl(roleInfo.location_image));
-      }
-      
     } catch (err) {
-      error = err.message;
-      loading = false;
+        error = err.message;
+        loading = false;
     }
   });
 
   onDestroy(() => {
     if (timerInterval) {
       clearInterval(timerInterval);
-      timeRemaining = '';
     }
     websocketStore.disconnect();
+    if (browser) {
+      sessionStorage.removeItem('gameState');
+    }
   });
 
-  // Add image loading state
-  let imageLoading = true;
-  let imageError = false;
-  let debugImageData = null;
-
-  async function verifyImage(url) {
-    try {
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const blob = await response.blob();
-      // Create an object URL for debugging
-      debugImageData = {
-        url: URL.createObjectURL(blob),
-        size: blob.size,
-        type: blob.type,
-        originalUrl: url
-      };
-      console.log('✅ Image verified:', debugImageData);
-      return true;
-    } catch (e) {
-      console.error('❌ Image verification failed:', e);
-      return false;
-    }
-  }
-
-  function handleImageLoad() {
-    imageLoading = false;
-  }
-
-  function handleImageError() {
-    imageLoading = false;
-    imageError = true;
-  }
-
-  // Function to load image
-  async function loadImage(url) {
-    try {
-      console.log('🔄 Loading image:', url);
-      imageLoading = true;
-      const response = await fetch(url, {
-        mode: 'cors',
-        credentials: 'omit',
-        headers: {
-          'Accept': 'image/webp,image/*,*/*'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const blob = await response.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      console.log('✅ Image loaded:', { size: blob.size, type: blob.type, url: objectUrl });
-      
-      debugImageData = {
-        url: objectUrl,
-        size: blob.size,
-        type: blob.type,
-        originalUrl: url
-      };
-
-      imageError = false;
-      return objectUrl;
-    } catch (e) {
-      console.error('❌ Image load error:', e);
-      imageLoading = false;
-      imageError = true;
-      return null;
-    }
-  }
-
-  // Add new function to handle image loaded in the DOM
+  // Add the missing handleImageLoaded function
   function handleImageLoaded() {
     console.log('🖼️ Image rendered in DOM');
     imageLoading = false;
   }
+
+  // ... rest of the component code (image handling, UI template) remains the same
 </script>
 
 <div class="min-h-screen bg-cyber-bg bg-gradient-to-b from-cyber-bg to-cyber-bg/50 pt-20">
   <div class="container mx-auto px-4">
     {#if loading}
-      <div class="flex justify-center items-center py-12">
-        <span class="loading loading-spinner loading-lg text-cyber-primary"></span>
-        <span class="ml-4 text-cyber-primary">Loading game state...</span>
+      <div class="flex flex-col justify-center items-center py-12 min-h-[50vh]">
+        <span class="loading loading-spinner loading-lg text-cyber-primary mb-4"></span>
+        <span class="text-cyber-primary text-lg">Loading game state...</span>
       </div>
     {:else if error}
       <div class="alert alert-error mb-8">
@@ -360,7 +289,9 @@
                       <img
                         src={debugImageData.url}
                         alt="Location"
-                        class="w-full h-full object-cover transition-opacity duration-300 {imageLoading ? 'opacity-0' : 'opacity-100'}"
+                        class="w-full h-full object-cover transition-opacity duration-300"
+                        class:opacity-0={imageLoading}
+                        class:opacity-100={!imageLoading}
                         on:load={handleImageLoaded}
                       />
                     {/if}

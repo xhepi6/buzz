@@ -5,6 +5,8 @@
   import { websocketStore } from '$lib/stores/websocketStore';
   import { api } from '$lib/api';
 
+  export const ssr = false;  // Disable SSR for game page
+
   let loading = true;
   let error = null;
   let user = null;

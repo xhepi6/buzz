@@ -1,4 +1,6 @@
 <script>
+  export const ssr = false;  // Disable SSR for room page
+  
   import { onMount, onDestroy } from 'svelte';
   import { page } from '$app/stores';
   import { Crown, Share2 } from 'lucide-svelte';
@@ -6,26 +8,50 @@
   import { userStore } from '$lib/stores/userStore';
   import { websocketStore } from '$lib/stores/websocketStore';
   import GameConfig from '$lib/components/GameConfig.svelte';
+  import { browser } from '$app/environment';
 
   let initialRoom = null;
   let loading = true;
   let error = null;
   let user = null;
 
-  $: user = $userStore;
+  // Create a promise that resolves when user is loaded
+  const userPromise = new Promise((resolve) => {
+    let unsubscribe;
+    
+    function handleUser(value) {
+      user = value;
+      if (value) {
+        if (unsubscribe) unsubscribe();
+        resolve(value);
+      } else if (browser) {
+        // If we're in the browser and there's no user, try to initialize
+        userStore.initialize().then(() => {
+          if (!user) {
+            if (unsubscribe) unsubscribe();
+            resolve(null);
+          }
+        });
+      }
+    }
+
+    // Set up the subscription
+    unsubscribe = userStore.subscribe(handleUser);
+  });
+
   $: room = $websocketStore.roomData || initialRoom;
 
   // Computed values
-  $: totalPlayers = room?.num_players || 0;
-  $: joinedPlayers = room?.players?.length || 0;
-  $: readyPlayers = room?.players?.filter(p => p.state === 'ready').length || 0;
+  $: totalPlayers = room?.num_players ?? 0;
+  $: joinedPlayers = room?.players?.length ?? 0;
+  $: readyPlayers = room?.players?.filter(p => p.state === 'ready').length ?? 0;
   $: joinedPercentage = (joinedPlayers / totalPlayers) * 100;
   $: readyPercentage = (readyPlayers / totalPlayers) * 100;
-  $: isInRoom = room?.players?.some(p => p.user_id === user?.id) || false;
+  $: isInRoom = room?.players?.some(p => p.user_id === user?.id) ?? false;
   $: currentPlayer = room?.players?.find(p => p.user_id === user?.id);
-  $: isReady = currentPlayer?.state === 'ready';
-  $: isHost = user?.id === room?.host;
-  $: allPlayersReady = room?.players?.every(p => p.state === "ready");
+  $: isReady = currentPlayer?.state === 'ready' ?? false;
+  $: isHost = user?.id === room?.host ?? false;
+  $: allPlayersReady = room?.players?.every(p => p.state === "ready") ?? false;
   $: canStartGame = isHost && allPlayersReady && joinedPlayers === totalPlayers;
 
   function getPlayerColor(nickname) {
@@ -56,16 +82,18 @@
 
   async function handleLeave() {
     try {
-      loading = true;
-      error = null;
-      
-      await api.leaveRoom($page.params.id);
-      // Disconnect WebSocket before navigating
-      websocketStore.disconnect();
-      window.location.href = '/';
+        loading = true;
+        error = null;
+        
+        await api.leaveRoom($page.params.id);
+        // Disconnect WebSocket before navigating
+        websocketStore.disconnect();
+        // Navigate to home
+        window.location.href = '/';
     } catch (err) {
-      error = err.message;
-      loading = false;
+        console.error('Failed to leave room:', err);
+        error = err.message;
+        loading = false;
     }
   }
 
@@ -96,40 +124,73 @@
 
   onMount(async () => {
     try {
-        console.log('📱 Mounting room page');
-        const roomId = $page.params.id;
-        
-        // Get initial room state
-        initialRoom = await api.getRoom(roomId);
-        console.log('📦 Initial room state:', initialRoom);
-        
-        // Set up WebSocket message handler first
-        websocketStore.setMessageHandler((data) => {
-            if (data.type === 'game_started') {
-                console.log('🎮 Game started:', data);
-                // The store will handle the connection switch and navigation
-            }
-        });
+        loading = true;
 
+        // Wait for user to be loaded
         try {
-            // Connect to lobby WebSocket
-            await websocketStore.connect(roomId, 'lobby');
-            console.log('✅ Lobby WebSocket connected successfully');
-            
-            // Join room if not already in
-            if (user && !initialRoom.players.some(p => p.user_id === user.id)) {
-                console.log('👤 Joining room as:', user.nickname);
-                const joinedRoom = await api.joinRoom(roomId);
-                initialRoom = joinedRoom;
+            const userData = await userPromise;
+            if (!userData) {
+                error = "Please log in to continue";
+                loading = false;
+                return;
             }
+        } catch (err) {
+            console.error('Failed to load user:', err);
+            error = "Failed to load user data";
+            loading = false;
+            return;
+        }
+
+        // Get initial room state
+        try {
+            initialRoom = await api.getRoom($page.params.id);
+            
+            // Check if user is not in room and join
+            if (!initialRoom.players.some(p => p.user_id === user?.id)) {
+                console.log('👤 Joining room as:', user.nickname);
+                initialRoom = await api.joinRoom($page.params.id);
+            }
+        } catch (err) {
+            console.error('Failed to load/join room:', err);
+            error = "Failed to load room data";
+            loading = false;
+            return;
+        }
+
+        // Connect to WebSocket
+        try {
+            await websocketStore.connect($page.params.id);
+            
+            // Set up message handler
+            websocketStore.setMessageHandler((data) => {
+                switch (data.type) {
+                    case 'room_update':
+                        console.log('📦 Room update received:', data.room);
+                        // Update both room and initialRoom to ensure reactivity
+                        room = data.room;
+                        initialRoom = data.room;
+                        break;
+                    case 'game_started':
+                        // Game started, store will handle navigation
+                        break;
+                    case 'game_ended':
+                        if (data.event === 'restart') {
+                            window.location.reload();
+                        }
+                        break;
+                }
+            });
         } catch (wsError) {
             console.error('❌ WebSocket connection failed:', wsError);
-            error = 'Failed to establish real-time connection. Please refresh the page.';
+            error = 'Failed to establish connection. Please refresh the page.';
+            loading = false;
+            return;
         }
+
+        loading = false;
     } catch (err) {
-        console.error('❌ Error in room page:', err);
+        console.error('Error in room page:', err);
         error = err.message;
-    } finally {
         loading = false;
     }
   });
@@ -144,8 +205,9 @@
     
     <!-- LOADING INDICATOR -->
     {#if loading}
-      <div class="flex justify-center items-center py-12">
-        <span class="loading loading-spinner loading-lg text-cyber-primary"></span>
+      <div class="flex flex-col justify-center items-center py-12 min-h-[50vh]">
+        <span class="loading loading-spinner loading-lg text-cyber-primary mb-4"></span>
+        <span class="text-cyber-primary text-lg">Loading room...</span>
       </div>
 
     <!-- ERROR ALERT -->
