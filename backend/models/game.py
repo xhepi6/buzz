@@ -2,6 +2,7 @@ from typing import Annotated, Dict, Optional, Any
 from bson.objectid import ObjectId
 from pydantic import BaseModel, Field, BeforeValidator
 from core.config import settings
+import os
 
 ObjectIdStr = Annotated[str, BeforeValidator(lambda x: str(x) if isinstance(x, ObjectId) else x)]
 
@@ -9,6 +10,10 @@ def get_full_url(path: str) -> str:
     """Convert a relative path to a full API URL"""
     if path.startswith('http'):
         return path
+    # Add version to static paths
+    if path.startswith('/static/'):
+        static_version = os.getenv("STATIC_VERSION", "1")
+        path = path.replace('/static/', f'/static/v{static_version}/')
     return f"{settings.API_URL}{path}"
 
 class GameBase(BaseModel):

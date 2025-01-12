@@ -10,7 +10,7 @@ from pathlib import Path
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Sartup
+    # Startup
     await mongodb.connect_db()
     yield
     # Shutdown
