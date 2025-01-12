@@ -378,6 +378,13 @@
               </div>
             {/if}
 
+            {#if timeRemaining}
+              <div class="border-t border-cyber-primary/20 mt-4 pt-4">
+                <h3 class="text-lg font-semibold text-cyber-primary mb-2">Time Remaining:</h3>
+                <p class="text-cyber-accent text-xl">{timeRemaining}</p>
+              </div>
+            {/if}
+
             <!-- All Possible Locations -->
             <div class="border-t border-cyber-primary/20 mt-4 pt-4">
               <h3 class="text-lg font-semibold text-cyber-primary mb-2">All Possible Locations:</h3>
@@ -412,13 +419,6 @@
                 {/each}
               </div>
             </div>
-
-            {#if timeRemaining}
-              <div class="border-t border-cyber-primary/20 mt-4 pt-4">
-                <h3 class="text-lg font-semibold text-cyber-primary mb-2">Time Remaining:</h3>
-                <p class="text-cyber-accent text-xl">{timeRemaining}</p>
-              </div>
-            {/if}
           </div>
         </div>
 
