@@ -12,10 +12,15 @@ class Settings(BaseSettings):
     MONGODB_URL: str = os.getenv("MONGODB_URL")
     MONGODB_DB: str = os.getenv("MONGODB_DB")
     
+    # API Settings
+    API_URL: str = os.getenv("API_URL", "http://localhost:8000")
+    
     # CORS Settings
     CORS_ORIGINS: list[str] = [
         "http://localhost:3000",
-        "http://localhost:3001"
+        "http://localhost:3001",
+        "http://localhost:5173",  # Vite dev server
+        "*"  # Allow all origins in development
     ]
     
     model_config = {
