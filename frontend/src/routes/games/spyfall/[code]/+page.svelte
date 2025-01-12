@@ -5,6 +5,8 @@
   import { websocketStore } from '$lib/stores/websocketStore';
   import { api } from '$lib/api';
 
+  let allLocations = [];
+
   // Get API URL from environment
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -32,6 +34,16 @@
   let timerInterval = null;
   let connectionAttempts = 0;
   const MAX_ATTEMPTS = 3;
+
+  // Fetch all locations when component mounts
+  async function fetchLocations() {
+    try {
+      const game = await api.getGame('spyfall');
+      allLocations = Object.keys(game.locations).sort();
+    } catch (err) {
+      console.error('Failed to fetch locations:', err);
+    }
+  }
 
   let userPromise = new Promise((resolve) => {
     userStore.subscribe(value => {
@@ -196,6 +208,7 @@
     try {
       loading = true;
       await userPromise;
+      await fetchLocations();
       
       if (!user) {
         error = "User not authenticated";
@@ -362,6 +375,18 @@
               </div>
             {/if}
 
+            <!-- All Possible Locations -->
+            <div class="border-t border-cyber-primary/20 mt-4 pt-4">
+              <h3 class="text-lg font-semibold text-cyber-primary mb-2">All Possible Locations:</h3>
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
+                {#each allLocations as location}
+                  <div class="p-2 bg-base-200 rounded text-center text-cyber-secondary hover:bg-base-300 transition-colors">
+                    {location}
+                  </div>
+                {/each}
+              </div>
+            </div>
+
             {#if timeRemaining}
               <div class="border-t border-cyber-primary/20 mt-4 pt-4">
                 <h3 class="text-lg font-semibold text-cyber-primary mb-2">Time Remaining:</h3>
@@ -371,15 +396,18 @@
           </div>
         </div>
 
+        <!-- Sticky Restart Button for Host -->
         {#if isHost}
-          <div class="mt-6 flex justify-center">
+          <div class="fixed bottom-0 left-0 right-0 p-4 bg-base-300/80 backdrop-blur flex justify-center">
             <button 
-              class="btn btn-primary"
+              class="btn btn-primary w-full max-w-md"
               on:click={handleRestart}
             >
               Restart Game
             </button>
           </div>
+          <!-- Spacer to prevent content from being hidden behind sticky button -->
+          <div class="h-20"></div>
         {/if}
       </div>
     {:else}
