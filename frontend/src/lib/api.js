@@ -15,6 +15,9 @@ async function fetchApi(endpoint, options = {}) {
 
     if (!response.ok) {
       const error = await response.json();
+      if (response.status === 404) {
+        throw new Error('Room not found. Please check the room code and try again.');
+      }
       throw new Error(error.detail || 'An error occurred');
     }
 
@@ -61,33 +64,41 @@ export const api = {
 
   getCategories: async () => fetchApi('/categories'),
 
-  createMafiaRoom: async (roomConfig) => fetchApi('/rooms', {
-    method: 'POST',
-    body: JSON.stringify({
-      game_type: 'mafia',
-      num_players: roomConfig.totalPlayers,
-      game_config: {
-        roles: roomConfig.roles,
-        moderator: roomConfig.roles.moderator,
-      },
-    }),
-  }),
+  createMafiaRoom: async (roomConfig) => {
+    const response = await fetchApi('/rooms', {
+      method: 'POST',
+      body: JSON.stringify({
+        game_type: 'mafia',
+        num_players: roomConfig.totalPlayers,
+        game_config: {
+          roles: roomConfig.roles,
+          moderator: roomConfig.roles.moderator,
+        },
+      }),
+    });
+    console.log('Room creation response:', response);
+    if (!response.code) {
+      throw new Error('Invalid room response');
+    }
+    return response;
+  },
 
   createSpyfallRoom: async (roomConfig) => fetchApi('/rooms/spyfall', {
     method: 'POST',
     body: JSON.stringify(roomConfig),
   }),
 
-
-  getRoom: async (roomId) => {
-    return await fetchApi(`/rooms/${roomId}`);
+  getRoom: async (code) => {
+    const response = await fetchApi(`/rooms/${code}`);
+    return response;
   },
 
-  
-  joinRoom: async (roomId, playerName) => fetchApi(`/rooms/${roomId}/join`, {
-    method: 'POST',
-    body: JSON.stringify({ playerName }),
-  }),
+  joinRoom: async (code) => {
+    const response = await fetchApi(`/rooms/${code}/join`, {
+      method: 'POST',
+    });
+    return response;
+  },
 
   getGameState: async (roomId) => fetchApi(`/rooms/${roomId}/state`),
 
@@ -95,4 +106,8 @@ export const api = {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     return `${protocol}//${window.location.host}/ws/${roomId}`;
   },
+
+  toggleReady: async (roomId) => fetchApi(`/rooms/${roomId}/ready`, {
+    method: 'POST',
+  }),
 };

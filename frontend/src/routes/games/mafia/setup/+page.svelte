@@ -46,25 +46,22 @@
         const roomConfig = {
             totalPlayers,
             roles: {
-            mafia: mafiaCount,
-            civilian: civilianCount,
-            doctor: hasDoctor ? 1 : 0,
-            police: hasPolice ? 1 : 0,
-            moderator: hasModerator,
+                mafia: mafiaCount,
+                civilian: civilianCount,
+                doctor: hasDoctor ? 1 : 0,
+                police: hasPolice ? 1 : 0,
+                moderator: hasModerator,
             },
         };
 
         try {
-            const room = await api.createMafiaRoom(roomConfig); // Using the unified endpoint
-            console.log('roomConfig');
-            console.log(roomConfig);
-            console.log('room');
-            console.log(room);
-            window.location.href = `/rooms/${room._id}`;
+            const room = await api.createMafiaRoom(roomConfig);
+            // Navigate to the room using the room code
+            window.location.href = `/rooms/${room.code}`;
         } catch (err) {
-            error = err.message;
+            toastStore.error(err.message);
         }
-        }
+    }
     onMount(() => {
       loadGame();
       userStore.init();
