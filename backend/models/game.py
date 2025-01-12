@@ -43,7 +43,6 @@ class Game(GameBase):
                 name: get_full_url(path)
                 for name, path in data['locations'].items()
             }
-            print(f"🖼️ Converted location images: {data['locations']}")  # Debug log
         return data
 
     model_config = {

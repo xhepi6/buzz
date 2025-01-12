@@ -1,23 +1,26 @@
-from typing import List, Dict
-from random import shuffle, choice
+from typing import List, Dict, Optional
+from random import choice, shuffle
 from models.spyfall import SpyfallPlayer, SpyfallRole, SpyfallRoleInfo
 from models.room import Room
 from datetime import datetime, timedelta
 from services.game_service import GameService
+import logging
+
+logger = logging.getLogger(__name__)
 
 class SpyfallService:
     @staticmethod
     async def assign_roles(room: Room) -> tuple[List[SpyfallPlayer], str]:
         """Assign roles to players and select location"""
         try:
-            print(f"🎲 Setting up Spyfall game for room {room.code}")
+            logger.info("Assigning roles for room %s", room.code)
             
             # Get game data for location images
             game = await GameService.get_game("spyfall")
             if not game:
                 raise ValueError("Spyfall game configuration not found")
                 
-            print(f"🎮 Game data received:", game.model_dump())
+            logger.info("🎮 Game data received:", game.model_dump())
             
             # Get game configuration
             spy_count = room.game_config.get("spyCount", 1)
@@ -28,15 +31,15 @@ class SpyfallService:
             available_locations = list(game.locations.keys())
             locations = custom_locations if use_custom_locations and custom_locations else available_locations
             selected_location = choice(locations)
-            print(f"📍 Selected location: {selected_location}")
+            logger.debug("Selected location: %s", selected_location)
             
             # Get location image if available
             location_image = game.locations.get(selected_location) if game.locations else None
-            print(f"🎯 Selected location image: {location_image}")
+            logger.info(f"🎯 Selected location image: {location_image}")
             
             if not location_image:
-                print(f"⚠️ No image found for location {selected_location}")
-                print(f"⚠️ Available locations: {available_locations}")
+                logger.warning(f"⚠️ No image found for location {selected_location}")
+                logger.warning(f"⚠️ Available locations: {available_locations}")
             
             # Prepare player list
             players = list(room.players)
@@ -73,7 +76,7 @@ class SpyfallService:
             
             # Debug log for role assignments
             for player in spyfall_players:
-                print(f"🎭 Role assigned to {player.nickname}:", {
+                logger.info(f"🎭 Role assigned to {player.nickname}:", {
                     "role": player.role_info.role,
                     "location": player.role_info.location,
                     "has_image": bool(player.role_info.location_image)
@@ -83,7 +86,7 @@ class SpyfallService:
             return spyfall_players, selected_location
             
         except Exception as e:
-            print(f"❌ Error in assign_roles: {str(e)}")
+            logger.error("Error in assign_roles: %s", str(e))
             raise
 
     @staticmethod
@@ -107,9 +110,9 @@ class SpyfallService:
                 "round_end_time": round_end_time
             }
             
-            print(f"🎮 Created Spyfall game state with UTC end time: {round_end_time}")
+            logger.info(f"🎮 Created Spyfall game state with UTC end time: {round_end_time}")
             return game_state
             
         except Exception as e:
-            print(f"❌ Error creating game state: {str(e)}")
+            logger.error("Error creating game state: %s", str(e))
             raise 

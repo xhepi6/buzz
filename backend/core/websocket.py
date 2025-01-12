@@ -1,6 +1,9 @@
 from typing import Dict, Set
 from fastapi import WebSocket
 from collections import defaultdict
+import logging
+
+logger = logging.getLogger(__name__)
 
 class ConnectionManager:
     def __init__(self):
@@ -9,20 +12,26 @@ class ConnectionManager:
         self.game_connections: Dict[str, Set[WebSocket]] = defaultdict(set)
         
     async def connect_to_lobby(self, websocket: WebSocket, room_id: str):
+        if room_id not in self.lobby_connections:
+            self.lobby_connections[room_id] = set()
         self.lobby_connections[room_id].add(websocket)
+        logger.debug("Added connection to lobby %s", room_id)
     
     async def connect_to_game(self, websocket: WebSocket, room_id: str):
+        if room_id not in self.game_connections:
+            self.game_connections[room_id] = set()
         self.game_connections[room_id].add(websocket)
+        logger.debug("Added connection to game %s", room_id)
     
     def disconnect_from_lobby(self, websocket: WebSocket, room_id: str):
-        self.lobby_connections[room_id].discard(websocket)
-        if not self.lobby_connections[room_id]:
-            del self.lobby_connections[room_id]
-            
+        if room_id in self.lobby_connections:
+            self.lobby_connections[room_id].discard(websocket)
+            logger.debug("Removed connection from lobby %s", room_id)
+    
     def disconnect_from_game(self, websocket: WebSocket, room_id: str):
-        self.game_connections[room_id].discard(websocket)
-        if not self.game_connections[room_id]:
-            del self.game_connections[room_id]
+        if room_id in self.game_connections:
+            self.game_connections[room_id].discard(websocket)
+            logger.debug("Removed connection from game %s", room_id)
     
     async def broadcast_to_lobby(self, room_id: str, message: dict):
         if room_id in self.lobby_connections:
@@ -30,7 +39,8 @@ class ConnectionManager:
             for connection in self.lobby_connections[room_id]:
                 try:
                     await connection.send_json(message)
-                except:
+                except Exception as e:
+                    logger.error("Error broadcasting to lobby: %s", str(e))
                     disconnected.add(connection)
             
             # Clean up disconnected clients
@@ -43,7 +53,8 @@ class ConnectionManager:
             for connection in self.game_connections[room_id]:
                 try:
                     await connection.send_json(message)
-                except:
+                except Exception as e:
+                    logger.error("Error broadcasting to game: %s", str(e))
                     disconnected.add(connection)
             
             # Clean up disconnected clients
@@ -60,12 +71,14 @@ class ConnectionManager:
                     # Check if this connection belongs to the target user
                     if getattr(websocket, "user_id", None) == user_id:
                         await websocket.send_json(message)
+                        logger.debug("Sent message to user %s in %s", user_id, connection_type)
                         return  # Message sent successfully
                 except Exception as e:
-                    print(f"Error sending to user {user_id}: {e}")
+                    logger.error("Error sending to user: %s", str(e))
+                    connections[room_id].discard(websocket)
 
         # If we get here, either the room doesn't exist or the user wasn't found
-        print(f"⚠️ Could not send message to user {user_id} in room {room_id} ({connection_type})")
+        logger.error("⚠️ Could not send message to user %s in room %s (%s)", user_id, room_id, connection_type)
 
 # Global instance
 manager = ConnectionManager() 

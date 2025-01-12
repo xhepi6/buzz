@@ -7,6 +7,9 @@ from models.user import User
 from core.websocket import manager
 from datetime import datetime
 from typing import List, Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -23,11 +26,13 @@ async def create_room(
         room = await RoomService.create_room(room_data, current_user)
         if not room:
             raise HTTPException(status_code=500, detail="Failed to create room")
+        logger.info("Room created: %s", room.code)
         return room
     except ValueError as e:
+        logger.error("Error creating room: %s", str(e))
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        print(f"Error creating room: {e}")  # Add logging
+        logger.error("Error creating room: %s", str(e))
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.get("/rooms/{room_code}", response_model=Room)
@@ -36,13 +41,13 @@ async def get_room(
     current_user: User = Depends(get_current_user)
 ):
     try:
-        print(f"Getting room {room_code} for user {current_user.id}")
+        logger.info("Getting room %s for user %s", room_code, current_user.id)
         room = await RoomService.get_room(room_code)
         if not room:
             raise HTTPException(status_code=404, detail="Room not found")
         return room
     except Exception as e:
-        print(f"Error getting room: {e}")
+        logger.error("Error getting room: %s", str(e))
         raise
 
 @router.post("/rooms/{room_code}/join", response_model=Room)
@@ -51,15 +56,15 @@ async def join_room(
     current_user: User = Depends(get_current_user)
 ):
     try:
-        print(f"👤 User {current_user.id} ({current_user.nickname}) attempting to join room {room_code}")
+        logger.info("👤 User %s (%s) attempting to join room %s", current_user.id, current_user.nickname, room_code)
         room = await RoomService.join_room(room_code, current_user)
-        print(f"✅ Join successful. Room now has {len(room.players)} players")
+        logger.info("✅ Join successful. Room now has %s players", len(room.players))
         return room
     except ValueError as e:
-        print(f"❌ Join failed: {str(e)}")
+        logger.error("❌ Join failed: %s", str(e))
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        print(f"❌ Error in join_room: {e}")
+        logger.error("❌ Error in join_room: %s", str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/rooms/{room_id}/ready", response_model=Room)
@@ -92,6 +97,7 @@ async def start_game(
     current_user: User = Depends(get_current_user)
 ):
     try:
+        logger.info("Starting game in room %s", room_code)
         room = await RoomService.start_game(room_code, current_user)
         
         # Get the game state which contains player roles
@@ -116,10 +122,10 @@ async def start_game(
         for player in room.players:
             role_info = role_mapping.get(player.user_id)
             if not role_info:
-                print(f"⚠️ No role info found for player {player.nickname}")
+                logger.warning("⚠️ No role info found for player %s", player.nickname)
                 continue
                 
-            print(f"👤 Sending role to player {player.nickname}: {role_info}")
+            logger.info("👤 Sending role to player %s: %s", player.nickname, role_info)
             await manager.send_to_user(
                 room_code,
                 str(player.user_id),
@@ -135,46 +141,46 @@ async def start_game(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        print(f"❌ Error in start_game endpoint: {str(e)}")
+        logger.error("❌ Error in start_game endpoint: %s", str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.websocket("/ws/lobby/{room_id}")
 async def lobby_websocket_endpoint(websocket: WebSocket, room_id: str):
-    print(f"🏠 Lobby WebSocket connection attempt for room: {room_id}")
+    logger.info("Lobby WebSocket connection attempt for room: %s", room_id)
     try:
         await websocket.accept()
-        print(f"✅ Lobby WebSocket connection accepted for room: {room_id}")
+        logger.debug("Lobby WebSocket connection accepted for room: %s", room_id)
         
         # Get and validate token
         token = websocket.query_params.get("token")
         if not token:
-            print(f"❌ No token provided, closing connection")
+            logger.warning("No token provided, closing connection")
             await websocket.close(code=4001)
             return
             
         try:
             user = await get_current_user(token)
             if not user:
-                print(f"❌ Invalid token, closing connection")
+                logger.warning("Invalid token, closing connection")
                 await websocket.close(code=4002)
                 return
             websocket.user_id = str(user.id)
-            print(f"👤 Lobby WebSocket authenticated for user: {user.nickname}")
+            logger.info("Lobby WebSocket authenticated for user: %s", user.nickname)
         except Exception as e:
-            print(f"❌ Token validation error: {e}")
+            logger.error("Token validation error: %s", str(e))
             await websocket.close(code=4002)
             return
 
         # Get room to validate it exists
         room = await RoomService.get_room(room_id)
         if not room:
-            print(f"❌ Room {room_id} not found")
+            logger.warning("Room %s not found", room_id)
             await websocket.close(code=4004)
             return
             
         # Add to manager's lobby connections
         await manager.connect_to_lobby(websocket, room_id)
-        print(f"🔗 WebSocket added to lobby manager: {room_id}")
+        logger.debug("WebSocket added to lobby manager: %s", room_id)
         
         # Send initial room state
         await websocket.send_json({
@@ -196,14 +202,14 @@ async def lobby_websocket_endpoint(websocket: WebSocket, room_id: str):
             while True:
                 data = await websocket.receive_text()
                 # Handle lobby-specific messages here if needed
-                print(f"📥 Received lobby message: {data}")
+                logger.debug("Received lobby message: %s", data)
                 
         except WebSocketDisconnect:
-            print(f"🔌 Lobby WebSocket disconnected for room: {room_id}")
+            logger.info("Lobby WebSocket disconnected for room: %s", room_id)
             manager.disconnect_from_lobby(websocket, room_id)
             
     except Exception as e:
-        print(f"❌ Lobby WebSocket error: {e}")
+        logger.error("❌ Lobby WebSocket error: %s", str(e))
         try:
             manager.disconnect_from_lobby(websocket, room_id)
             await websocket.close()
@@ -212,71 +218,56 @@ async def lobby_websocket_endpoint(websocket: WebSocket, room_id: str):
 
 @router.websocket("/ws/game/{room_id}")
 async def game_websocket_endpoint(websocket: WebSocket, room_id: str):
-    print(f"🎮 Game WebSocket connection attempt for room: {room_id}")
+    logger.info("Game WebSocket connection attempt for room: %s", room_id)
     try:
         await websocket.accept()
-        print(f"✅ Game WebSocket connection accepted for room: {room_id}")
+        logger.debug("Game WebSocket connection accepted for room: %s", room_id)
         
         # Get and validate token
         token = websocket.query_params.get("token")
         if not token:
-            print(f"❌ No token provided, closing connection")
+            logger.warning("No token provided, closing game connection")
             await websocket.close(code=4001)
             return
             
         try:
             user = await get_current_user(token)
             if not user:
-                print(f"❌ Invalid token, closing connection")
+                logger.warning("Invalid token, closing game connection")
                 await websocket.close(code=4002)
                 return
             websocket.user_id = str(user.id)
-            print(f"👤 Game WebSocket authenticated for user: {user.nickname}")
+            logger.info("Game WebSocket authenticated for user: %s", user.nickname)
         except Exception as e:
-            print(f"❌ Token validation error: {e}")
+            logger.error("Token validation error in game connection: %s", str(e))
             await websocket.close(code=4002)
             return
 
-        # Get room and validate game is in progress
+        # Get room to validate it exists
         room = await RoomService.get_room(room_id)
-        if not room or room.room_state != "in_game":
-            print(f"❌ Room {room_id} not found or not in game state")
+        if not room:
+            logger.warning("Room %s not found for game connection", room_id)
             await websocket.close(code=4004)
             return
             
         # Add to manager's game connections
-        manager.game_connections[room_id].add(websocket)
-        print(f"🔗 WebSocket added to game manager: {room_id}")
-        
-        # Send initial game state
-        game_state = room.game_state
-        if game_state:
-            player_state = next(
-                (p for p in game_state['players'] if p['user_id'] == str(user.id)), 
-                None
-            )
-            if player_state:
-                await websocket.send_json({
-                    "type": "game_update",
-                    "event": "role_assigned",
-                    "player_id": str(user.id),
-                    "role_info": player_state['role_info']
-                })
+        await manager.connect_to_game(websocket, room_id)
+        logger.debug("WebSocket added to game manager: %s", room_id)
         
         try:
             while True:
-                data = await websocket.receive_json()
+                data = await websocket.receive_text()
                 # Handle game-specific messages here
-                print(f"📥 Received game message: {data}")
+                logger.debug("Received game message: %s", data)
                 
         except WebSocketDisconnect:
-            print(f"🔌 Game WebSocket disconnected for room: {room_id}")
-            manager.game_connections[room_id].discard(websocket)
+            logger.info("Game WebSocket disconnected for room: %s", room_id)
+            manager.disconnect_from_game(websocket, room_id)
             
     except Exception as e:
-        print(f"❌ Game WebSocket error: {e}")
+        logger.error("Game WebSocket error: %s", str(e))
         try:
-            manager.game_connections[room_id].discard(websocket)
+            manager.disconnect_from_game(websocket, room_id)
             await websocket.close()
         except:
             pass
@@ -287,7 +278,7 @@ async def restart_game(
     current_user: User = Depends(get_current_user)
 ):
     try:
-        print(f"🔄 Attempting to restart game for room: {room_code}")
+        logger.info("🔄 Attempting to restart game for room: %s", room_code)
         room = await RoomService.restart_game(room_code, current_user)
         
         # Broadcast game restart event to all players
@@ -315,8 +306,8 @@ async def restart_game(
             
         return room
     except ValueError as e:
-        print(f"❌ Validation error in restart_game: {str(e)}")
+        logger.error("❌ Validation error in restart_game: %s", str(e))
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        print(f"❌ Error in restart_game endpoint: {str(e)}")
+        logger.error("❌ Error in restart_game endpoint: %s", str(e))
         raise HTTPException(status_code=500, detail=str(e))

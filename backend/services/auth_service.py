@@ -3,6 +3,9 @@ from uuid import UUID, uuid4
 from passlib.context import CryptContext
 from models.user import UserInDB, UserCreate, UserUpdate
 from core.mongodb import mongodb
+import logging
+
+logger = logging.getLogger(__name__)
 
 pwd_context = CryptContext(
     schemes=["bcrypt"],
@@ -50,7 +53,7 @@ class UserService:
         try:
             await mongodb.db.users.insert_one(user_dict)
         except Exception as e:
-            print(f"Error creating user: {e}")
+            logger.error("Error creating user: %s", str(e))
             raise ValueError("Failed to create user")
         
         return user_db
