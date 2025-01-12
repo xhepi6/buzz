@@ -25,6 +25,7 @@ class Room(BaseModel):
     host: str
     chat_history: List[Dict[str, Any]]
     can_start: bool
+    game_state: Optional[Dict[str, Any]] = None
 
     class Config:
         populate_by_name = True

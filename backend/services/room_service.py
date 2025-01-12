@@ -7,6 +7,8 @@ import random
 import string
 from core.websocket import manager
 from datetime import datetime
+from services.mafia_service import MafiaService
+from models.mafia import MafiaRole
 
 class RoomService:
     @staticmethod
@@ -90,19 +92,44 @@ class RoomService:
         try:
             room_doc = await mongodb.db.rooms.find_one({"code": room_code})
             if room_doc:
+                # Ensure players exists and is a list
+                if 'players' not in room_doc or room_doc['players'] is None:
+                    room_doc['players'] = []
+                
                 # Enrich each player with user data
                 enriched_players = []
                 for player in room_doc['players']:
-                    enriched_player = await RoomService._enrich_player_data(player)
-                    enriched_players.append(enriched_player)
+                    try:
+                        enriched_player = await RoomService._enrich_player_data(player)
+                        enriched_players.append(enriched_player)
+                    except Exception as e:
+                        print(f"❌ Error enriching player data: {e}")
+                        continue
+                    
                 room_doc['players'] = enriched_players
                 
+                # Convert _id to string
                 room_doc['_id'] = str(room_doc['_id'])
+                
+                # Handle game state if it exists
+                if 'game_state' in room_doc and room_doc['game_state']:
+                    game_state = room_doc['game_state']
+                    # Ensure players exists in game state
+                    if 'players' in game_state:
+                        for player in game_state['players']:
+                            if player.get('role_info') and isinstance(player['role_info'].get('role'), dict):
+                                player['role_info']['role'] = player['role_info']['role'].get('value')
+                    room_doc['game_state'] = game_state
+                else:
+                    room_doc['game_state'] = None
+                
+                print(f"📦 Room data before creating model: {room_doc}")
                 return Room(**room_doc)
             return None
         except Exception as e:
-            print(f"Error getting room: {e}")
-            return None
+            print(f"❌ Error getting room: {e}")
+            print(f"Room document: {room_doc if 'room_doc' in locals() else 'Not found'}")
+            raise
     
     @staticmethod
     async def join_room(room_code: str, user: User) -> Room:
@@ -144,7 +171,7 @@ class RoomService:
             print(f"Room after join: {updated_room.model_dump()}")
             
             # Broadcast update after successful join
-            await manager.broadcast_to_room(
+            await manager.broadcast_to_lobby(
                 room_code,
                 {
                     "type": "room_update",
@@ -205,7 +232,7 @@ class RoomService:
             updated_room = await RoomService.get_room(room_code)
             
             # Direct broadcast instead of using broadcast_room_update
-            await manager.broadcast_to_room(
+            await manager.broadcast_to_lobby(
                 room_code,
                 {
                     "type": "room_update",
@@ -267,7 +294,7 @@ class RoomService:
                 # Delete room if empty
                 await mongodb.db.rooms.delete_one({"code": room_code})
                 # Broadcast room deletion
-                await manager.broadcast_to_room(
+                await manager.broadcast_to_lobby(
                     room_code,
                     {
                         "type": "room_update",
@@ -287,7 +314,7 @@ class RoomService:
                 updated_room = await RoomService.get_room(room_code)
             
             # Broadcast player left update
-            await manager.broadcast_to_room(
+            await manager.broadcast_to_lobby(
                 room_code,
                 {
                     "type": "room_update",
@@ -319,108 +346,149 @@ class RoomService:
     @staticmethod
     async def start_game(room_code: str, user: User) -> Room:
         try:
+            print(f"🎮 Starting game for room {room_code}")
+            room = await RoomService.get_room(room_code)
+            if not room:
+                raise ValueError("Room not found")
+            
+            print(f"👥 Room found with {len(room.players)} players")
+            
+            if room.host != str(user.id):
+                raise ValueError("Only the host can start the game")
+            
+            if not all(p.state == "ready" for p in room.players):
+                raise ValueError("Not all players are ready")
+            
+            if len(room.players) != room.num_players:
+                raise ValueError("Not all players have joined")
+            
+            # Initialize game state based on game type
+            if room.game_type == "mafia":
+                print(f"🎲 Initializing Mafia game")
+                try:
+                    mafia_players = MafiaService.assign_roles(room)
+                    game_state = MafiaService.create_game_state(mafia_players)
+                    
+                    print(f"💾 Updating room state in database")
+                    # Update room with game state
+                    result = await mongodb.db.rooms.update_one(
+                        {"code": room_code},
+                        {"$set": {
+                            "room_state": "in_game",
+                            "game_state": game_state
+                        }}
+                    )
+                    
+                    if result.modified_count == 0:
+                        raise ValueError("Failed to update room state")
+                    
+                    print(f"📢 Broadcasting game start")
+                    # Broadcast game started to all players
+                    await manager.broadcast_to_lobby(
+                        room_code,
+                        {
+                            "type": "game_started",
+                            "game_type": room.game_type,
+                            "room_code": room.code
+                        }
+                    )
+                    
+                    print(f"📨 Sending individual role information")
+                    # Send individual role information
+                    for player in mafia_players:
+                        try:
+                            role_info = player.role_info.model_dump()
+                            # Only convert to value if it's an Enum
+                            if isinstance(role_info.get('role'), MafiaRole):
+                                role_info['role'] = role_info['role'].value
+                                
+                            print(f"  -> Sending role to {player.nickname}: {role_info}")
+                            await manager.send_to_user(
+                                room_code,
+                                player.user_id,
+                                {
+                                    "type": "game_update",
+                                    "event": "role_assigned",
+                                    "player_id": player.user_id,
+                                    "role_info": role_info
+                                },
+                                'lobby'  # Send through lobby connection since game connection isn't established yet
+                            )
+                        except Exception as e:
+                            print(f"❌ Error sending role to {player.nickname}: {str(e)}")
+                            raise
+                    
+                    return await RoomService.get_room(room_code)
+                    
+                except Exception as e:
+                    print(f"❌ Error in Mafia game initialization: {str(e)}")
+                    raise ValueError(f"Failed to initialize Mafia game: {str(e)}")
+            else:
+                raise ValueError(f"Unsupported game type: {room.game_type}")
+            
+        except Exception as e:
+            print(f"❌ Error in start_game: {str(e)}")
+            raise
+
+    @staticmethod
+    async def restart_game(room_code: str, user: User) -> Room:
+        try:
+            print(f"🔄 Attempting to restart game for room: {room_code}")
             room = await RoomService.get_room(room_code)
             if not room:
                 raise ValueError("Room not found")
             
             if room.host != str(user.id):
-                raise ValueError("Only the host can start the game")
+                raise ValueError("Only the host can restart the game")
             
-            # Assign roles randomly
-            players = room.players.copy()
-            random.shuffle(players)
-            
-            roles = room.game_config["roles"]
-            assigned_roles = []
-            
-            # Assign mafia roles
-            mafia_players = players[:roles["mafia"]]
-            for player in mafia_players:
-                assigned_roles.append({
-                    "player_id": player.user_id,
-                    "role": "mafia",
-                    "description": "Eliminate the civilians without getting caught.",
-                    "teammates": [{"nickname": p.nickname} for p in mafia_players if p.user_id != player.user_id]
-                })
-            
-            # Assign special roles
-            current_index = roles["mafia"]
-            
-            if roles.get("doctor", 0):
-                assigned_roles.append({
-                    "player_id": players[current_index].user_id,
-                    "role": "doctor",
-                    "description": "Save one person each night from being eliminated.",
-                    "teammates": []
-                })
-                current_index += 1
-            
-            if roles.get("police", 0):
-                assigned_roles.append({
-                    "player_id": players[current_index].user_id,
-                    "role": "police",
-                    "description": "Investigate one person each night to determine if they are mafia.",
-                    "teammates": []
-                })
-                current_index += 1
-            
-            # Remaining players are civilians
-            for player in players[current_index:]:
-                assigned_roles.append({
-                    "player_id": player.user_id,
-                    "role": "civilian",
-                    "description": "Find and eliminate the mafia before they eliminate you.",
-                    "teammates": []
-                })
-            
-            # Update room state and store roles
-            await mongodb.db.rooms.update_one(
-                {"code": room_code},
-                {
-                    "$set": {
-                        "room_state": "in_game",
-                        "game_state": {
-                            "phase": "night",
-                            "round": 1,
-                            "roles": assigned_roles
+            # Get current players before resetting
+            current_players = []
+            if hasattr(room, 'players') and room.players:
+                for player in room.players:
+                    try:
+                        player_data = {
+                            "user_id": str(player.user_id),  # Ensure user_id is string
+                            "nickname": player.nickname,
+                            "full_name": getattr(player, 'full_name', None),
+                            "email": getattr(player, 'email', None),
+                            "state": "not_ready"
                         }
-                    }
-                }
+                        current_players.append(player_data)
+                        print(f"✅ Processed player: {player_data}")
+                    except Exception as e:
+                        print(f"❌ Error processing player {player}: {str(e)}")
+                        continue
+            
+            print(f"🔄 Resetting room with {len(current_players)} players")
+            
+            # Reset room state
+            update_data = {
+                "room_state": "lobby",
+                "game_state": None,
+                "players": current_players
+            }
+            
+            # Update the room
+            result = await mongodb.db.rooms.update_one(
+                {"code": room_code},
+                {"$set": update_data}
             )
             
-            # First broadcast game start to all players
-            await manager.broadcast_to_room(
-                room_code,
-                {
-                    "type": "room_update",
-                    "event": "game_started",
-                    "room": room.model_dump(),
-                    "timestamp": datetime.now().isoformat()
-                }
-            )
+            if result.modified_count == 0:
+                print("⚠️ No modifications made to room")
+                # Get the current room state to verify
+                current_room = await mongodb.db.rooms.find_one({"code": room_code})
+                print(f"Current room state: {current_room}")
+                raise ValueError("Failed to restart game")
             
-            # Log role assignments
-            print(f"🎲 Role assignments for room {room_code}:")
-            for role in assigned_roles:
-                print(f"👤 Player {role['player_id']}: {role['role']}")
-
-            # Send individual role information
-            for role in assigned_roles:
-                print(f"📤 Sending role to player {role['player_id']}")
-                await manager.send_to_user(
-                    room_code,
-                    role["player_id"],
-                    {
-                        "type": "game_update",
-                        "event": "role_assigned",
-                        "player_id": role["player_id"],
-                        "player_role": role
-                    }
-                )
-                print(f"✅ Role sent to player {role['player_id']}")
+            # Get and return updated room
+            updated_room = await RoomService.get_room(room_code)
+            if not updated_room:
+                raise ValueError("Failed to get updated room state")
             
-            return await RoomService.get_room(room_code)
+            print(f"✅ Room {room_code} successfully restarted")
+            return updated_room
             
         except Exception as e:
-            print(f"Error starting game: {e}")
+            print(f"❌ Error restarting game: {str(e)}")
             raise
