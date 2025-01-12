@@ -49,7 +49,6 @@
       }
       
       const roomConfig = {
-        gameId: game.id,
         totalPlayers,
         settings: {
           roundMinutes,
@@ -61,9 +60,9 @@
       
       try {
         const room = await api.createSpyfallRoom(roomConfig);
-        window.location.href = `/rooms/${room._id}`;
+        window.location.href = `/rooms/${room.code}`;
       } catch (err) {
-        error = err.message;
+        toastStore.error(err.message);
       }
     }
     

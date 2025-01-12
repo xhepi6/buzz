@@ -162,3 +162,68 @@ class RoomService:
             raise ValueError("Failed to update ready state")
         
         return await RoomService.get_room(room_code)
+
+    @staticmethod
+    async def leave_room(room_code: str, user: User) -> Room:
+        # Check if room exists
+        room = await RoomService.get_room(room_code)
+        if not room:
+            raise ValueError("Room not found")
+        
+        # Check if user is in the room
+        if not any(p.user_id == str(user.id) for p in room.players):
+            raise ValueError("User not in room")
+        
+        # Remove player from room
+        result = await mongodb.db.rooms.update_one(
+            {"code": room_code},
+            {"$pull": {"players": {"user_id": str(user.id)}}}
+        )
+        
+        if result.modified_count == 0:
+            raise ValueError("Failed to leave room")
+        
+        # If room is empty, delete it
+        updated_room = await RoomService.get_room(room_code)
+        if not updated_room.players:
+            await mongodb.db.rooms.delete_one({"code": room_code})
+            return updated_room
+        
+        # If leaving user was host, assign new host
+        if updated_room.host == str(user.id) and updated_room.players:
+            new_host = updated_room.players[0].user_id
+            await mongodb.db.rooms.update_one(
+                {"code": room_code},
+                {"$set": {"host": new_host}}
+            )
+        
+        return await RoomService.get_room(room_code)
+    
+    @staticmethod
+    async def start_game(room_code: str, user: User) -> Room:
+        # Check if room exists
+        room = await RoomService.get_room(room_code)
+        if not room:
+            raise ValueError("Room not found")
+        
+        # Verify user is host
+        if room.host != str(user.id):
+            raise ValueError("Only the host can start the game")
+        
+        # Check if game can start
+        if len(room.players) != room.num_players:
+            raise ValueError("Not enough players")
+        
+        if not all(p.state == "ready" for p in room.players):
+            raise ValueError("Not all players are ready")
+        
+        # Update room state
+        result = await mongodb.db.rooms.update_one(
+            {"code": room_code},
+            {"$set": {"room_state": "in_game"}}
+        )
+        
+        if result.modified_count == 0:
+            raise ValueError("Failed to start game")
+        
+        return await RoomService.get_room(room_code)

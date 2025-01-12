@@ -83,10 +83,25 @@ export const api = {
     return response;
   },
 
-  createSpyfallRoom: async (roomConfig) => fetchApi('/rooms/spyfall', {
-    method: 'POST',
-    body: JSON.stringify(roomConfig),
-  }),
+  createSpyfallRoom: async (roomConfig) => {
+    const response = await fetchApi('/rooms', {
+      method: 'POST',
+      body: JSON.stringify({
+        game_type: 'spyfall',
+        num_players: roomConfig.totalPlayers,
+        game_config: {
+          spyCount: roomConfig.settings.spyCount,
+          roundMinutes: roomConfig.settings.roundMinutes,
+          useCustomLocations: roomConfig.settings.useCustomLocations,
+          customLocations: roomConfig.settings.customLocations
+        }
+      }),
+    });
+    if (!response.code) {
+      throw new Error('Invalid room response');
+    }
+    return response;
+  },
 
   getRoom: async (code) => {
     const response = await fetchApi(`/rooms/${code}`);
@@ -110,4 +125,18 @@ export const api = {
   toggleReady: async (roomId) => fetchApi(`/rooms/${roomId}/ready`, {
     method: 'POST',
   }),
+
+  leaveRoom: async (code) => {
+    const response = await fetchApi(`/rooms/${code}/leave`, {
+        method: 'POST'
+    });
+    return response;
+  },
+
+  startGame: async (code) => {
+    const response = await fetchApi(`/rooms/${code}/start`, {
+        method: 'POST'
+    });
+    return response;
+  },
 };

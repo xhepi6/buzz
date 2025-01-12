@@ -4,11 +4,8 @@ from typing_extensions import Annotated
 from bson.objectid import ObjectId
 import random
 
-# Custom type for handling ObjectId
-PyObjectId = Annotated[str, BeforeValidator(lambda x: str(x))]
 
-def generate_room_code():
-    return str(random.randint(1000, 9999))
+PyObjectId = Annotated[str, BeforeValidator(lambda x: str(x))]
 
 class PlayerState(BaseModel):
     user_id: str

@@ -59,3 +59,27 @@ async def toggle_ready(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/rooms/{room_code}/leave", response_model=Room)
+async def leave_room(
+    room_code: str,
+    current_user: User = Depends(get_current_user)
+):
+    try:
+        return await RoomService.leave_room(room_code, current_user)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/rooms/{room_code}/start", response_model=Room)
+async def start_game(
+    room_code: str,
+    current_user: User = Depends(get_current_user)
+):
+    try:
+        return await RoomService.start_game(room_code, current_user)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
