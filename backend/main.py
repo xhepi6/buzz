@@ -18,6 +18,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Buzz API", lifespan=lifespan)
 
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 # General CORS middleware
 app.add_middleware(
     CORSMiddleware,
