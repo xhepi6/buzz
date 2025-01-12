@@ -7,12 +7,13 @@
   import { websocketStore } from '$lib/stores/websocketStore';
   import GameConfig from '$lib/components/GameConfig.svelte';
 
-  let room = null;
+  let initialRoom = null;
   let loading = true;
   let error = null;
   let user = null;
 
   $: user = $userStore;
+  $: room = $websocketStore.roomData || initialRoom;
 
   // Computed values
   $: totalPlayers = room?.num_players || 0;
@@ -97,32 +98,33 @@
     try {
         console.log('📱 Mounting room page');
         const roomId = $page.params.id;
-        room = await api.getRoom(roomId);
-        console.log('📦 Initial room state:', room);
         
-        // Set up WebSocket message handler
+        // Get initial room state
+        initialRoom = await api.getRoom(roomId);
+        console.log('📦 Initial room state:', initialRoom);
+        
+        // Set up WebSocket message handler first
         websocketStore.setMessageHandler((data) => {
-            if (data.type === 'room_update') {
-                console.log('🔄 Room update received:', data);
-                room = {
-                    ...room,
-                    ...data.room,
-                    players: data.players || data.room.players
-                };
-            } else if (data.type === 'game_started') {
+            if (data.type === 'game_started') {
                 console.log('🎮 Game started:', data);
                 window.location.href = `/games/${room.game_type}/${room.code}`;
             }
         });
 
-        // Connect to WebSocket
-        await websocketStore.connect(roomId);
-        
-        // Join room if not already in
-        if (user && !room.players.some(p => p.user_id === user.id)) {
-            console.log('👤 Joining room as:', user.nickname);
-            const joinedRoom = await api.joinRoom(roomId);
-            room = joinedRoom;
+        try {
+            // Then connect to WebSocket
+            await websocketStore.connect(roomId);
+            console.log('✅ WebSocket connected successfully');
+            
+            // Join room if not already in
+            if (user && !initialRoom.players.some(p => p.user_id === user.id)) {
+                console.log('👤 Joining room as:', user.nickname);
+                const joinedRoom = await api.joinRoom(roomId);
+                initialRoom = joinedRoom;
+            }
+        } catch (wsError) {
+            console.error('❌ WebSocket connection failed:', wsError);
+            error = 'Failed to establish real-time connection. Please refresh the page.';
         }
     } catch (err) {
         console.error('❌ Error in room page:', err);

@@ -5,47 +5,79 @@ function createWebsocketStore() {
     const { subscribe, set, update } = writable({
         connected: false,
         error: null,
-        lastUpdate: null
+        lastUpdate: null,
+        roomData: null
     });
 
     let ws = null;
     let reconnectTimer = null;
     let currentRoomId = null;
+    let messageHandler = null; // Store the message handler
 
     return {
         subscribe,
-        connect: (roomId) => {
+        connect: async (roomId) => {
             currentRoomId = roomId;
             const token = localStorage.getItem('token');
             const wsUrl = `${api.getWebSocketUrl(roomId)}?token=${token}`;
             
-            ws = new WebSocket(wsUrl);
+            console.log('🔌 Attempting WebSocket connection to:', wsUrl);
             
-            ws.onopen = () => {
-                console.log('WebSocket connected');
-                update(store => ({ ...store, connected: true, error: null }));
-            };
-            
-            ws.onerror = () => {
-                console.error('WebSocket error');
-                update(store => ({ ...store, error: 'Connection error' }));
-            };
-            
-            ws.onclose = () => {
-                console.log('WebSocket closed');
-                update(store => ({ ...store, connected: false }));
+            return new Promise((resolve, reject) => {
+                ws = new WebSocket(wsUrl);
                 
-                // Attempt to reconnect if we still have a room ID
-                if (currentRoomId) {
-                    reconnectTimer = setTimeout(() => {
-                        console.log('Attempting to reconnect...');
-                        this.connect(currentRoomId);
-                    }, 5000);
-                }
-            };
+                const timeout = setTimeout(() => {
+                    reject(new Error('WebSocket connection timeout'));
+                }, 5000);
+
+                ws.onopen = () => {
+                    clearTimeout(timeout);
+                    console.log('🔌 WebSocket connected successfully');
+                    update(store => ({ ...store, connected: true, error: null }));
+                    
+                    // Set message handler after connection if one was provided
+                    if (messageHandler && ws) {
+                        ws.onmessage = messageHandler;
+                    }
+                    
+                    resolve();
+                };
+
+                ws.onerror = (error) => {
+                    clearTimeout(timeout);
+                    console.error('❌ WebSocket error:', error);
+                    update(store => ({ 
+                        ...store, 
+                        error: 'Connection error',
+                        connected: false 
+                    }));
+                    reject(error);
+                };
+                
+                ws.onclose = (event) => {
+                    console.log('🔌 WebSocket closed:', {
+                        code: event.code,
+                        reason: event.reason,
+                        wasClean: event.wasClean
+                    });
+                    update(store => ({ ...store, connected: false }));
+                    
+                    if (currentRoomId) {
+                        console.log('🔄 Scheduling reconnection attempt...');
+                        reconnectTimer = setTimeout(() => {
+                            console.log('🔄 Attempting to reconnect...');
+                            this.connect(currentRoomId);
+                        }, 5000);
+                    }
+                };
+            });
         },
+        
         disconnect: () => {
+            console.log('🔌 Disconnecting WebSocket...');
             currentRoomId = null;
+            messageHandler = null;
+            
             if (reconnectTimer) {
                 clearTimeout(reconnectTimer);
             }
@@ -53,19 +85,43 @@ function createWebsocketStore() {
                 ws.close();
                 ws = null;
             }
+            update(store => ({ 
+                ...store, 
+                roomData: null,
+                connected: false 
+            }));
         },
+        
         setMessageHandler: (handler) => {
-            if (ws) {
-                ws.onmessage = (event) => {
-                    try {
-                        const data = JSON.parse(event.data);
-                        console.log('WebSocket message received:', data);
-                        update(store => ({ ...store, lastUpdate: Date.now() }));
-                        handler(data);
-                    } catch (err) {
-                        console.error('Error handling WebSocket message:', err);
+            // Create wrapper for the message handler
+            messageHandler = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    console.log('📨 WebSocket message received:', data);
+                    
+                    if (data.type === 'room_update') {
+                        update(store => ({
+                            ...store,
+                            lastUpdate: Date.now(),
+                            roomData: {
+                                ...store.roomData,
+                                ...data.room,
+                                players: data.players || data.room.players
+                            }
+                        }));
                     }
-                };
+                    
+                    handler(data);
+                } catch (err) {
+                    console.error('❌ Error handling WebSocket message:', err);
+                }
+            };
+            
+            // If we already have a connection, set the handler immediately
+            if (ws) {
+                ws.onmessage = messageHandler;
+            } else {
+                console.log('⏳ Message handler stored for when connection is established');
             }
         }
     };
