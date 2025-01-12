@@ -1,9 +1,16 @@
-from typing import Annotated
+from typing import Annotated, Dict, Optional, List, Any
 from bson.objectid import ObjectId
 from pydantic import BaseModel, Field, BeforeValidator
+from core.config import settings
 
 # Custom type for converting string to ObjectId and back
 ObjectIdStr = Annotated[str, BeforeValidator(lambda x: str(x) if isinstance(x, ObjectId) else x)]
+
+def get_full_url(path: str) -> str:
+    """Convert a relative path to a full API URL"""
+    if path.startswith('http'):
+        return path
+    return f"{settings.API_URL or 'http://localhost:8000'}{path}"
 
 class GameBase(BaseModel):
     name: str
@@ -17,11 +24,34 @@ class GameBase(BaseModel):
     duration_minutes: int
 
 class Game(GameBase):
-    id: ObjectIdStr = Field(alias="_id", default=None)
+    id: ObjectIdStr = Field(alias="_id")
+    name: str
+    slug: str
+    description: str
+    min_players: int
+    max_players: int
+    category: str
+    featured: bool = False
+    locations: Optional[Dict[str, str]] = None  # Map location names to their image paths
+    settings: Dict[str, Any]
+
+    def model_dump(self, **kwargs):
+        data = super().model_dump(**kwargs)
+        # Convert relative paths to full URLs for location images
+        if data.get('locations'):
+            data['locations'] = {
+                name: get_full_url(path)
+                for name, path in data['locations'].items()
+            }
+            print(f"🖼️ Converted location images: {data['locations']}")  # Debug log
+        return data
 
     model_config = {
         "populate_by_name": True,
         "arbitrary_types_allowed": True,
+        "json_encoders": {
+            ObjectId: str
+        },
         "json_schema_extra": {
             "example": {
                 "_id": "507f1f77bcf86cd799439011",
