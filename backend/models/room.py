@@ -1,60 +1,55 @@
-from typing import List, Dict, Union, Literal
-from datetime import datetime
-from pydantic import BaseModel, BeforeValidator, Field
+from typing import List, Dict, Any, Optional, Union
+from pydantic import BaseModel, Field, BeforeValidator
+from typing_extensions import Annotated
 from bson.objectid import ObjectId
-from typing import Annotated
+import random
 
-# Custom type for ObjectId
-ObjectIdStr = Annotated[str, BeforeValidator(lambda x: str(x) if isinstance(x, ObjectId) else x)]
+# Custom type for handling ObjectId
+PyObjectId = Annotated[str, BeforeValidator(lambda x: str(x))]
+
+def generate_room_code():
+    return str(random.randint(1000, 9999))
 
 class PlayerState(BaseModel):
     user_id: str
-    state: Literal["ready", "not_ready"] = "not_ready"
-
-class ChatMessage(BaseModel):
-    user_id: str
-    message: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
-
-class MafiaConfig(BaseModel):
-    roles: Dict[str, int]  # e.g., {"mafia": 2, "civilian": 4, "doctor": 1}
-    moderator: bool = False
-
-class SpyfallConfig(BaseModel):
-    round_minutes: int
-    spy_count: int
-    use_custom_locations: bool = False
-    custom_locations: List[str] = []
-
-class RoomCreate(BaseModel):
-    game_type: Literal["mafia", "spyfall"]
-    num_players: int
-    game_config: Union[MafiaConfig, SpyfallConfig]
+    nickname: Optional[str] = None
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    state: str = "not_ready"
 
 class Room(BaseModel):
-    id: ObjectIdStr = Field(alias="_id", default=None)
-    game_type: Literal["mafia", "spyfall"]
-    room_state: Literal["lobby", "in_game"] = "lobby"
+    id: PyObjectId = Field(alias="_id")
+    code: str  # 4-digit room code
+    game_type: str
+    room_state: str
     num_players: int
-    players: List[PlayerState] = []
-    game_config: Union[MafiaConfig, SpyfallConfig]
+    players: List[PlayerState]
+    game_config: Dict[str, Any]
     host: str
-    chat_history: List[ChatMessage] = []
-    can_start: bool = False
+    chat_history: List[Dict[str, Any]]
+    can_start: bool
 
     class Config:
         populate_by_name = True
-        arbitrary_types_allowed = True
-        json_schema_extra = {
-            "example": {
-                "_id": "507f1f77bcf86cd799439011",
-                "game_type": "mafia",
-                "room_state": "lobby",
-                "num_players": 6,
-                "players": [{"user_id": "user123", "state": "ready"}],
-                "game_config": {"roles": {"mafia": 2, "civilian": 3, "doctor": 1}, "moderator": True},
-                "host": "user123",
-                "chat_history": [],
-                "can_start": False,
-            }
-        }
+
+class MafiaRoles(BaseModel):
+    mafia: int
+    civilian: int
+    doctor: Optional[int] = 0
+    police: Optional[int] = 0
+    moderator: bool = False
+
+class MafiaConfig(BaseModel):
+    roles: MafiaRoles
+    moderator: bool = False
+
+class RoomCreate(BaseModel):
+    game_type: str
+    num_players: int
+    game_config: Dict[str, Any]  # Keep this flexible for different game types
+
+    def validate_mafia_config(self):
+        if self.game_type == "mafia":
+            if not isinstance(self.game_config.get("roles"), dict):
+                raise ValueError("Mafia game requires roles configuration")
+            # Add more validation as needed
