@@ -2,21 +2,24 @@ from typing import List, Dict
 from random import shuffle
 from models.mafia import MafiaPlayer, MafiaRole, ROLE_DESCRIPTIONS
 from models.room import Room
+import logging
+
+logger = logging.getLogger(__name__)
 
 class MafiaService:
     @staticmethod
     def assign_roles(room: Room) -> List[MafiaPlayer]:
         """Assign roles to players in the room"""
         try:
-            print(f"🎲 Assigning roles for room {room.code}")
-            print(f"📊 Game config: {room.game_config}")
+            logger.info("Assigning roles for room %s", room.code)
+            logger.debug("Game config: %s", room.game_config)
             
             roles = room.game_config.get("roles")
             if not roles:
                 raise ValueError("No roles configuration found in game_config")
             
             players = room.players
-            print(f"👥 Players to assign: {len(players)}")
+            logger.debug("Players to assign: %d", len(players))
             
             # Validate role counts
             total_roles = (
@@ -42,12 +45,12 @@ class MafiaService:
                 if role_type in role_mapping:
                     role_list.extend([role_mapping[role_type]] * count)
                 else:
-                    print(f"⚠️ Skipping invalid role type: {role_type}")
+                    logger.warning("Skipping invalid role type: %s", role_type)
             
             if not role_list:
                 raise ValueError("No valid roles could be assigned")
                 
-            print(f"🎭 Role list created: {role_list}")
+            logger.debug("Role list created: %s", role_list)
             shuffle(role_list)
             
             # Create MafiaPlayer instances
@@ -56,7 +59,7 @@ class MafiaService:
             
             for i, player in enumerate(players):
                 role = role_list[i]
-                print(f"👤 Assigning {role} to player {player.nickname}")
+                logger.debug("Assigning %s to player %s", role, player.nickname)
                 
                 # Track mafia members for teammate assignment
                 if role == MafiaRole.MAFIA:
@@ -76,11 +79,11 @@ class MafiaService:
                 )
                 mafia_players.append(mafia_player)
             
-            print(f"✅ Role assignment complete. {len(mafia_players)} players assigned")
+            logger.info("Role assignment complete. %d players assigned", len(mafia_players))
             return mafia_players
             
         except Exception as e:
-            print(f"❌ Error in assign_roles: {str(e)}")
+            logger.error("Error in assign_roles: %s", str(e))
             raise
 
     @staticmethod
@@ -105,9 +108,9 @@ class MafiaService:
                 "votes": {},
                 "night_actions": {}
             }
-            print(f"🎮 Created game state: {game_state}")
+            logger.debug("Created game state: %s", game_state)
             return game_state
             
         except Exception as e:
-            print(f"❌ Error creating game state: {str(e)}")
+            logger.error("Error creating game state: %s", str(e))
             raise 
