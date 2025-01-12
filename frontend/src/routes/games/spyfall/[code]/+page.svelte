@@ -5,6 +5,22 @@
   import { websocketStore } from '$lib/stores/websocketStore';
   import { api } from '$lib/api';
 
+  // Get API URL from environment
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+  function getFullImageUrl(path) {
+    if (!path) return null;
+    // If it's already a full URL, return it
+    if (path.startsWith('http')) return path;
+    // If it starts with /static, prepend the API URL
+    if (path.startsWith('/static')) {
+      const fullUrl = `${API_URL}${path}`;
+      console.log('🔍 Building full URL:', fullUrl);
+      return fullUrl;
+    }
+    return path;
+  }
+
   let loading = true;
   let error = null;
   let user = null;
@@ -123,7 +139,15 @@
       websocketStore.setMessageHandler((data) => {
         if (data.type === 'game_update' && data.event === 'role_assigned') {
           if (data.player_id === user?.id) {
+            console.log('📦 Received role info:', data.role_info);
+            console.log('🖼️ Location image path:', data.role_info.location_image);
             roleInfo = data.role_info;
+            if (roleInfo.location_image) {
+              console.log('🔄 Loading image from:', getFullImageUrl(roleInfo.location_image));
+              loadImage(getFullImageUrl(roleInfo.location_image));
+            } else {
+              console.warn('⚠️ No location image in role info');
+            }
             loading = false;
           }
         }
@@ -181,6 +205,11 @@
       
       await connectAndListen();
       
+      // Verify image once roleInfo is available
+      if (roleInfo?.location_image) {
+        await verifyImage(getFullImageUrl(roleInfo.location_image));
+      }
+      
     } catch (err) {
       error = err.message;
       loading = false;
@@ -194,6 +223,86 @@
     }
     websocketStore.disconnect();
   });
+
+  // Add image loading state
+  let imageLoading = true;
+  let imageError = false;
+  let debugImageData = null;
+
+  async function verifyImage(url) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const blob = await response.blob();
+      // Create an object URL for debugging
+      debugImageData = {
+        url: URL.createObjectURL(blob),
+        size: blob.size,
+        type: blob.type,
+        originalUrl: url
+      };
+      console.log('✅ Image verified:', debugImageData);
+      return true;
+    } catch (e) {
+      console.error('❌ Image verification failed:', e);
+      return false;
+    }
+  }
+
+  function handleImageLoad() {
+    imageLoading = false;
+  }
+
+  function handleImageError() {
+    imageLoading = false;
+    imageError = true;
+  }
+
+  // Function to load image
+  async function loadImage(url) {
+    try {
+      console.log('🔄 Loading image:', url);
+      imageLoading = true;
+      const response = await fetch(url, {
+        mode: 'cors',
+        credentials: 'omit',
+        headers: {
+          'Accept': 'image/webp,image/*,*/*'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      console.log('✅ Image loaded:', { size: blob.size, type: blob.type, url: objectUrl });
+      
+      debugImageData = {
+        url: objectUrl,
+        size: blob.size,
+        type: blob.type,
+        originalUrl: url
+      };
+
+      imageError = false;
+      return objectUrl;
+    } catch (e) {
+      console.error('❌ Image load error:', e);
+      imageLoading = false;
+      imageError = true;
+      return null;
+    }
+  }
+
+  // Add new function to handle image loaded in the DOM
+  function handleImageLoaded() {
+    console.log('🖼️ Image rendered in DOM');
+    imageLoading = false;
+  }
 </script>
 
 <div class="min-h-screen bg-cyber-bg bg-gradient-to-b from-cyber-bg to-cyber-bg/50 pt-20">
@@ -222,6 +331,34 @@
               <div class="border-t border-cyber-primary/20 pt-4">
                 <h3 class="text-lg font-semibold text-cyber-primary mb-2">Location:</h3>
                 <p class="text-cyber-accent">{roleInfo.location}</p>
+                
+                {#if roleInfo.location_image}
+                  <div class="relative aspect-video mt-4 bg-base-200 rounded-lg overflow-hidden">
+                    {#if imageLoading}
+                      <div class="absolute inset-0 flex items-center justify-center">
+                        <span class="loading loading-spinner loading-lg text-cyber-primary"></span>
+                      </div>
+                    {/if}
+                    
+                    {#if debugImageData?.url}
+                      <img
+                        src={debugImageData.url}
+                        alt="Location"
+                        class="w-full h-full object-cover transition-opacity duration-300 {imageLoading ? 'opacity-0' : 'opacity-100'}"
+                        on:load={handleImageLoaded}
+                      />
+                    {/if}
+                    
+                    {#if imageError}
+                      <div class="absolute inset-0 flex items-center justify-center bg-base-200">
+                        <div class="text-center text-cyber-secondary">
+                          <span class="text-4xl">🖼️</span>
+                          <p class="mt-2">Image not available</p>
+                        </div>
+                      </div>
+                    {/if}
+                  </div>
+                {/if}
               </div>
             {/if}
 
@@ -252,3 +389,16 @@
     {/if}
   </div>
 </div> 
+
+<style>
+  /* Add smooth transitions for image loading */
+  img {
+    transition: opacity 0.3s ease-in-out;
+  }
+  
+  .aspect-video {
+    aspect-ratio: 16 / 9;
+    position: relative;
+    overflow: hidden;
+  }
+</style> 
