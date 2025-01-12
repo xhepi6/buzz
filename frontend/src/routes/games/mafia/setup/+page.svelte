@@ -3,22 +3,23 @@
     import { onMount } from 'svelte';
     import { api } from '$lib/api';
     import { userStore } from '$lib/stores/userStore';
+    import { toastStore } from '$lib/stores/toastStore';
     
     let game = null;
     let loading = true;
     let error = null;
     let user = null;
+    let showAuthModal = false;
     
     // Game setup state
-    let totalPlayers = 6;
-    let mafiaCount = 2;
-    let hasDoctor = true;
-    let hasPolice = true;
-    let hasModerator = true;
+    let totalPlayers = 4;
+    let mafiaCount = 1;
+    let hasDoctor = false;
+    let hasPolice = false;
+    let hasModerator = false;
     
-    // Computed values
     $: civilianCount = totalPlayers - mafiaCount - (hasPolice ? 1 : 0) - (hasDoctor ? 1 : 0);
-    $: isValidSetup = civilianCount >= 2 && mafiaCount >= 1 && totalPlayers >= game?.min_players && totalPlayers <= game?.max_players;
+    $: isValidSetup = civilianCount >= 0;
     
     userStore.subscribe(value => {
       user = value;
@@ -98,13 +99,13 @@
               <label class="label">
                 <span class="label-text text-cyber-primary">Total Players</span>
                 <span class="label-text-alt text-cyber-secondary">
-                  {game.min_players}-{game.max_players} players
+                  4-12 players
                 </span>
               </label>
               <input
                 type="range"
-                min={game.min_players}
-                max={game.max_players}
+                min="4"
+                max="12"
                 bind:value={totalPlayers}
                 class="range range-primary"
               />
@@ -119,7 +120,7 @@
               <input
                 type="range"
                 min="1"
-                max={Math.floor(totalPlayers / 3)}
+                max={Math.max(1, Math.floor(totalPlayers / 3))}
                 bind:value={mafiaCount}
                 class="range range-secondary"
               />
@@ -162,12 +163,6 @@
             >
               Create Room
             </button>
-            
-            {#if !isValidSetup}
-              <p class="text-error text-sm mt-2">
-                Please ensure a valid role distribution with at least 2 civilians and 1 mafia.
-              </p>
-            {/if}
           </div>
         </div>
       {/if}
