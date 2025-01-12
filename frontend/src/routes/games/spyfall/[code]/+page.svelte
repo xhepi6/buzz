@@ -6,6 +6,7 @@
   import { api } from '$lib/api';
 
   let allLocations = [];
+  let locationImages = {};  // Store location images mapping
 
   // Get API URL from environment
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -39,7 +40,9 @@
   async function fetchLocations() {
     try {
       const game = await api.getGame('spyfall');
-      allLocations = Object.keys(game.locations).sort();
+      // Store both location names and their image paths
+      locationImages = game.locations;
+      allLocations = Object.keys(locationImages).sort();
     } catch (err) {
       console.error('Failed to fetch locations:', err);
     }
@@ -378,10 +381,33 @@
             <!-- All Possible Locations -->
             <div class="border-t border-cyber-primary/20 mt-4 pt-4">
               <h3 class="text-lg font-semibold text-cyber-primary mb-2">All Possible Locations:</h3>
-              <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
+              <!-- 
+                Version with thumbnails (current)
+                To revert to text-only version:
+                1. Remove locationImages object
+                2. Replace this grid with:
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
+                  {#each allLocations as location}
+                    <div class="p-2 bg-base-200 rounded text-center text-cyber-secondary hover:bg-base-300 transition-colors">
+                      {location}
+                    </div>
+                  {/each}
+                </div>
+              -->
+              <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 text-sm">
                 {#each allLocations as location}
-                  <div class="p-2 bg-base-200 rounded text-center text-cyber-secondary hover:bg-base-300 transition-colors">
-                    {location}
+                  <div class="bg-base-200 rounded overflow-hidden hover:bg-base-300 transition-all hover:scale-105">
+                    <div class="aspect-video w-full relative">
+                      <img
+                        src={getFullImageUrl(locationImages[location])}
+                        alt={location}
+                        class="w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                    </div>
+                    <div class="p-1 text-center text-cyber-secondary text-xs">
+                      {location}
+                    </div>
                   </div>
                 {/each}
               </div>
