@@ -107,14 +107,14 @@
         websocketStore.setMessageHandler((data) => {
             if (data.type === 'game_started') {
                 console.log('🎮 Game started:', data);
-                window.location.href = `/games/${room.game_type}/${room.code}`;
+                // The store will handle the connection switch and navigation
             }
         });
 
         try {
-            // Then connect to WebSocket
-            await websocketStore.connect(roomId);
-            console.log('✅ WebSocket connected successfully');
+            // Connect to lobby WebSocket
+            await websocketStore.connect(roomId, 'lobby');
+            console.log('✅ Lobby WebSocket connected successfully');
             
             // Join room if not already in
             if (user && !initialRoom.players.some(p => p.user_id === user.id)) {

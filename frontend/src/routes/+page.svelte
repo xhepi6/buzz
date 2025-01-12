@@ -77,9 +77,9 @@
     }, 3000);
   }
 
-  onMount(() => {
+  onMount(async () => {
     loadFeaturedGames();
-    userStore.init(); // Use userStore instead of authStore
+    await userStore.initialize(); // Changed from init to initialize
   });
 </script>
 

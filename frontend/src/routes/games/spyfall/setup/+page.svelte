@@ -66,9 +66,9 @@
       }
     }
     
-    onMount(() => {
+    onMount(async () => {
       loadGame();
-      userStore.init();
+      await userStore.initialize();
     });
   </script>
   
