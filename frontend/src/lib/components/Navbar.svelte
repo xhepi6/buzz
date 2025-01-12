@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import AuthModal from './AuthModal.svelte';
   import { userStore } from '../stores/userStore';
+  import { api } from '$lib/api';
 
   let showAuthModal = false;
   let user = null;
@@ -10,12 +11,14 @@
     user = value;
   });
 
-  onMount(() => {
-    userStore.init();
+  onMount(async () => {
+    await userStore.initialize();
   });
 
-  function handleLogout() {
-    userStore.logout();
+  async function handleLogout() {
+    api.logout();
+    userStore.clearUser();
+    window.location.href = '/';
   }
 
   function handleKeyDown(event) {

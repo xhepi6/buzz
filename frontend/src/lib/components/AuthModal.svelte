@@ -38,18 +38,15 @@
     
     try {
       if (isLogin) {
-        await api.login(email, password);
+        await userStore.login(email, password);
       } else {
-        await api.register(email, password, fullName, nickname);
+        await userStore.register(email, password, fullName, nickname);
       }
-      
-      // Get user profile and update store
-      const user = await api.getCurrentUser();
-      userStore.set(user);
       
       onClose();
     } catch (err) {
-      error = err.message;
+      error = err.message || 'An error occurred';
+      console.error('Auth error:', err);
     } finally {
       isLoading = false;
     }
