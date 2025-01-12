@@ -1,16 +1,15 @@
-from typing import Annotated, Dict, Optional, List, Any
+from typing import Annotated, Dict, Optional, Any
 from bson.objectid import ObjectId
 from pydantic import BaseModel, Field, BeforeValidator
 from core.config import settings
 
-# Custom type for converting string to ObjectId and back
 ObjectIdStr = Annotated[str, BeforeValidator(lambda x: str(x) if isinstance(x, ObjectId) else x)]
 
 def get_full_url(path: str) -> str:
     """Convert a relative path to a full API URL"""
     if path.startswith('http'):
         return path
-    return f"{settings.API_URL or 'http://localhost:8000'}{path}"
+    return f"{settings.API_URL}{path}"
 
 class GameBase(BaseModel):
     name: str
