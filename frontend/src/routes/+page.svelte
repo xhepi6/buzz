@@ -9,18 +9,14 @@
 
   let roomCode = '';
   let error = null;
-  let user = null;
   let showAuthModal = false;
   let showError = false;
 
-  // Subscribe to user store
-  userStore.subscribe(value => {
-    user = value;
-  });
-
-  // Initialize `featuredGames` as an empty array
+  // Add type for featuredGames
+  /** @type {Array<any>} */
   let featuredGames = [];
   let loadingFeaturedGames = true;
+  /** @type {string|null} */
   let featuredGamesError = null;
 
   // Fetch featured games from the API
@@ -45,8 +41,8 @@
         return;
       }
 
-      // Check if user is authenticated
-      if (!user) {
+      // Check if user is authenticated using userStore
+      if (!$userStore) {
         showAuthModal = true;
         return;
       }
@@ -55,14 +51,17 @@
       try {
         const room = await api.getRoom(roomCode);
         goto(`/rooms/${roomCode}`);
-      } catch (err) {
+      } catch (error) {
+        // Type the error properly
+        const err = error instanceof Error ? error : new Error('Unknown error');
         if (err.message.includes('404') || err.message.includes('not found')) {
           toastStore.warning("Room not found. Please check the room code and try again.");
         } else {
           toastStore.error("Failed to join room. Please try again.");
         }
       }
-    } catch (err) {
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error('Unknown error');
       toastStore.error(err.message);
     }
   }
@@ -80,7 +79,7 @@
 
   onMount(() => {
     loadFeaturedGames();
-    userStore.init();
+    userStore.init(); // Use userStore instead of authStore
   });
 </script>
 

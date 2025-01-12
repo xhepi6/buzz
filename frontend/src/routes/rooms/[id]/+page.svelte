@@ -4,90 +4,28 @@
   import { Crown, Share2 } from 'lucide-svelte';
   import { api } from '$lib/api';
   import { userStore } from '$lib/stores/userStore';
+  import { websocketStore } from '$lib/stores/websocketStore';
   import GameConfig from '$lib/components/GameConfig.svelte';
 
   let room = null;
   let loading = true;
   let error = null;
   let user = null;
-  let ws = null;
 
-  userStore.subscribe((value) => {
-    user = value;
-  });
+  $: user = $userStore;
 
-  async function loadRoom() {
-    try {
-      const roomId = $page.params.id;
-      room = await api.getRoom(roomId);
-      loading = false;
-    } catch (err) {
-      error = err.message;
-      loading = false;
-    }
-  }
-
-  async function joinRoom() {
-    try {
-      const roomId = $page.params.id;
-      room = await api.joinRoom(roomId);
-      initWebSocket();
-    } catch (err) {
-      error = err.message;
-    }
-  }
-
-  async function handleLeave() {
-    try {
-      const roomCode = $page.params.id;
-      await api.leaveRoom(roomCode);
-      window.location.href = '/';
-    } catch (err) {
-      toastStore.error(err.message);
-    }
-  }
-
-  function initWebSocket() {
-    const roomId = $page.params.id;
-    const wsUrl = api.getWebSocketUrl(roomId);
-    ws = new WebSocket(wsUrl);
-
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === 'room_update') {
-        room = data.room;
-      }
-    };
-
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-    };
-
-    ws.onclose = () => {
-      console.log('WebSocket connection closed');
-    };
-  }
-
-  async function handleReady() {
-    try {
-      const roomId = $page.params.id;
-      room = await api.toggleReady(roomId);
-    } catch (err) {
-      error = err.message;
-    }
-  }
-
-  function handleShare() {
-    navigator.clipboard.writeText(window.location.href);
-  }
-
+  // Computed values
   $: totalPlayers = room?.num_players || 0;
   $: joinedPlayers = room?.players?.length || 0;
-  $: readyPlayers = room?.players?.filter((p) => p.state === 'ready').length || 0;
+  $: readyPlayers = room?.players?.filter(p => p.state === 'ready').length || 0;
   $: joinedPercentage = (joinedPlayers / totalPlayers) * 100;
   $: readyPercentage = (readyPlayers / totalPlayers) * 100;
-  $: isInRoom = room?.players?.some((p) => p.user_id === user?.id) || false;
-  $: isReady = room?.players?.find((p) => p.user_id === user?.id)?.state === 'ready';
+  $: isInRoom = room?.players?.some(p => p.user_id === user?.id) || false;
+  $: currentPlayer = room?.players?.find(p => p.user_id === user?.id);
+  $: isReady = currentPlayer?.state === 'ready';
+  $: isHost = user?.id === room?.host;
+  $: allPlayersReady = room?.players?.every(p => p.state === "ready");
+  $: canStartGame = isHost && allPlayersReady && joinedPlayers === totalPlayers;
 
   function getPlayerColor(nickname) {
     const colors = ['bg-blue-500', 'bg-purple-500', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500'];
@@ -96,54 +34,108 @@
     return colors[index];
   }
 
-  // Computed values for game start conditions
-  $: isHost = user?.id === room?.host;
-  $: allPlayersReady = room?.players?.every(p => p.state === "ready");
-  $: canStartGame = isHost && allPlayersReady && joinedPlayers === totalPlayers;
+  async function handleReady(event) {
+    if (event) event.preventDefault();
+    
+    try {
+      loading = true;
+      error = null;
+      console.log('🔄 Toggling ready state...');
+      
+      await api.toggleReady($page.params.id);
+      console.log('✅ Ready state toggled, waiting for WebSocket update');
+      
+    } catch (err) {
+      console.error('❌ Error toggling ready state:', err);
+      error = err.message;
+    } finally {
+      loading = false;
+    }
+  }
+
+  async function handleLeave() {
+    try {
+      loading = true;
+      error = null;
+      
+      await api.leaveRoom($page.params.id);
+      // Disconnect WebSocket before navigating
+      websocketStore.disconnect();
+      window.location.href = '/';
+    } catch (err) {
+      error = err.message;
+      loading = false;
+    }
+  }
 
   async function handleStartGame() {
     try {
-      const roomCode = $page.params.id;
-      const response = await api.startGame(roomCode);
-      // The game state will be updated through WebSocket
-      // You might want to redirect to the game page here
-      window.location.href = `/games/${room.game_type}/${roomCode}`;
+        loading = true;
+        error = null;
+        
+        await api.startGame($page.params.id);
+        // Wait for game_started event via WebSocket
+        console.log('✅ Game start request sent, waiting for confirmation...');
+        
     } catch (err) {
-      toastStore.error(err.message);
+        console.error('❌ Error starting game:', err);
+        error = err.message;
+        loading = false;
+        
+        // If unauthorized, try to refresh token or redirect to login
+        if (err.message === 'Could not validate credentials') {
+            window.location.href = '/';
+        }
     }
+  }
+
+  function handleShare() {
+    navigator.clipboard.writeText(window.location.href);
   }
 
   onMount(async () => {
-    await loadRoom();
-    if (room && user && !room.players.some((p) => p.user_id === user.id)) {
-      await joinRoom();
+    try {
+        console.log('📱 Mounting room page');
+        const roomId = $page.params.id;
+        room = await api.getRoom(roomId);
+        console.log('📦 Initial room state:', room);
+        
+        // Set up WebSocket message handler
+        websocketStore.setMessageHandler((data) => {
+            if (data.type === 'room_update') {
+                console.log('🔄 Room update received:', data);
+                room = {
+                    ...room,
+                    ...data.room,
+                    players: data.players || data.room.players
+                };
+            } else if (data.type === 'game_started') {
+                console.log('🎮 Game started:', data);
+                window.location.href = `/games/${room.game_type}/${room.code}`;
+            }
+        });
+
+        // Connect to WebSocket
+        await websocketStore.connect(roomId);
+        
+        // Join room if not already in
+        if (user && !room.players.some(p => p.user_id === user.id)) {
+            console.log('👤 Joining room as:', user.nickname);
+            const joinedRoom = await api.joinRoom(roomId);
+            room = joinedRoom;
+        }
+    } catch (err) {
+        console.error('❌ Error in room page:', err);
+        error = err.message;
+    } finally {
+        loading = false;
     }
-    initWebSocket();
   });
 
   onDestroy(() => {
-    if (ws) {
-      ws.close();
-    }
+    websocketStore.disconnect();
   });
 </script>
-
-<style>
-  @keyframes pulse-slow {
-    0%, 100% {
-      transform: scale(1);
-      opacity: 1;
-    }
-    50% {
-      transform: scale(1.01);
-      opacity: 0.9;
-    }
-  }
-  
-  .animate-pulse-slow {
-    animation: pulse-slow 3s ease-in-out infinite;
-  }
-</style>
 
 <div class="min-h-screen bg-cyber-bg bg-gradient-to-b from-cyber-bg to-cyber-bg/50 pt-20 flex flex-col">
   <div class="container mx-auto px-4 flex-1 overflow-y-auto">
@@ -160,8 +152,9 @@
         <span>{error}</span>
       </div>
 
-    <!-- ROOM HEADER CARD -->
+    <!-- ROOM CONTENT -->
     {:else if room}
+      <!-- ROOM HEADER -->
       <div class="card bg-base-100/50 backdrop-blur shadow-xl border border-cyber-primary/20 mb-6">
         <div class="p-6">
           <div class="flex items-center">
@@ -186,7 +179,7 @@
         </div>
       </div>
 
-      <!-- PROGRESS BARS CARD -->
+      <!-- PROGRESS BARS -->
       <div class="card bg-base-100/50 backdrop-blur shadow-xl border border-cyber-primary/20 mb-6">
         <div class="p-6 space-y-4">
           <h2 class="text-lg font-bold text-cyber-primary">Current Status</h2>
@@ -207,10 +200,10 @@
         </div>
       </div>
 
-      <!-- GAME CONFIGURATION CARD -->
+      <!-- GAME CONFIG -->
       <GameConfig gameType={room.game_type} config={room.game_config} />
 
-      <!-- PLAYERS GRID CARD -->
+      <!-- PLAYERS GRID -->
       <div class="card bg-base-100/50 backdrop-blur shadow-xl border border-cyber-primary/20 mb-6">
         <div class="p-6">
           <h2 class="text-lg font-bold text-cyber-primary mb-4">Players</h2>
@@ -233,7 +226,10 @@
                 <span class="text-cyber-primary font-medium text-sm mb-1">
                   {player.nickname || 'Anonymous'}
                 </span>
-                <span class="text-xs {player.state === 'ready' ? 'text-emerald-400' : 'text-cyber-secondary/50'}">
+                <span 
+                  class="text-xs transition-colors duration-300 
+                         {player.state === 'ready' ? 'text-emerald-400' : 'text-cyber-secondary/50'}"
+                >
                   {player.state === 'ready' ? 'Ready' : 'Not Ready'}
                 </span>
                 {#if player.user_id === room.host}
@@ -292,16 +288,26 @@
           </button>
         {/if}
         <button 
-          class="btn btn-primary w-full font-medium"
-          on:click={handleReady}
+          class="btn btn-primary font-medium px-6"
+          on:click|preventDefault={handleReady}
+          disabled={loading}
         >
-          {isReady ? 'Not Ready' : 'Ready Up'}
+          {#if loading}
+            <span class="loading loading-spinner loading-sm"></span>
+          {:else}
+            {isReady ? 'Not Ready' : 'Ready Up'}
+          {/if}
         </button>
         <button 
-          class="btn btn-secondary w-full font-medium"
+          class="btn btn-secondary font-medium px-6"
           on:click={handleLeave}
+          disabled={loading}
         >
-          Leave Room
+          {#if loading}
+            <span class="loading loading-spinner loading-sm"></span>
+          {:else}
+            Leave Room
+          {/if}
         </button>
       </div>
     </div>
@@ -330,18 +336,46 @@
           {/if}
           <button 
             class="btn btn-primary font-medium px-6"
-            on:click={handleReady}
+            on:click|preventDefault={handleReady}
+            disabled={loading}
           >
-            {isReady ? 'Not Ready' : 'Ready Up'}
+            {#if loading}
+              <span class="loading loading-spinner loading-sm"></span>
+            {:else}
+              {isReady ? 'Not Ready' : 'Ready Up'}
+            {/if}
           </button>
           <button 
             class="btn btn-secondary font-medium px-6"
             on:click={handleLeave}
+            disabled={loading}
           >
-            Leave Room
+            {#if loading}
+              <span class="loading loading-spinner loading-sm"></span>
+            {:else}
+              Leave Room
+            {/if}
           </button>
         </div>
       </div>
+    </div>
+  {/if}
+
+  <!-- WebSocket status indicator -->
+  {#if $websocketStore.connected}
+    <div class="fixed top-4 right-4 text-xs text-cyber-accent">
+      Connected
+    </div>
+  {:else if $websocketStore.error}
+    <div class="fixed top-4 right-4 text-xs text-error">
+      Connection Error - Retrying...
+    </div>
+  {/if}
+
+  <!-- Add a last update indicator -->
+  {#if $websocketStore.lastUpdate}
+    <div class="fixed top-4 left-4 text-xs text-cyber-secondary">
+      Last update: {new Date($websocketStore.lastUpdate).toLocaleTimeString()}
     </div>
   {/if}
 </div>

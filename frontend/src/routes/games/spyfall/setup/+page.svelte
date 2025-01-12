@@ -4,6 +4,7 @@
     import { api } from '$lib/api';
     import AuthModal from '$lib/components/AuthModal.svelte';
     import { userStore } from '$lib/stores/userStore';
+    import { toastStore } from '$lib/stores/toastStore';
     
     let game = null;
     let loading = true;
@@ -19,7 +20,6 @@
     let customLocationsText = '';
     $: customLocations = customLocationsText.split('\n').filter(Boolean);
     
-    // Computed values
     $: isValidSetup = totalPlayers >= game?.min_players && 
                       totalPlayers <= game?.max_players && 
                       spyCount < totalPlayers / 2;
