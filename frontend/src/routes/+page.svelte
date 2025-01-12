@@ -47,15 +47,21 @@
         return;
       }
 
-      // Verify room exists before joining
       try {
+        // First verify room exists
         const room = await api.getRoom(roomCode);
+        
+        // Then join the room
+        await api.joinRoom(roomCode);
+        
+        // Navigate to room page
         goto(`/rooms/${roomCode}`);
       } catch (error) {
-        // Type the error properly
         const err = error instanceof Error ? error : new Error('Unknown error');
         if (err.message.includes('404') || err.message.includes('not found')) {
           toastStore.warning("Room not found. Please check the room code and try again.");
+        } else if (err.message.includes('full')) {
+          toastStore.warning("This room is full.");
         } else {
           toastStore.error("Failed to join room. Please try again.");
         }
@@ -67,6 +73,10 @@
   }
 
   function handleCreateRoom() {
+    if (!$userStore) {
+      showAuthModal = true;
+      return;
+    }
     goto('/games');
   }
 

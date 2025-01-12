@@ -1,25 +1,20 @@
 <script>
-  import { onMount } from 'svelte';
+  import { page } from '$app/stores';
+  import { userStore } from '$lib/stores/userStore';
+  import { browser } from '$app/environment';
   import AuthModal from './AuthModal.svelte';
-  import { userStore } from '../stores/userStore';
-  import { api } from '$lib/api';
 
+  // Track loading state
+  let isLoading = true;
   let showAuthModal = false;
-  let user = null;
 
+  // Subscribe to user store to handle loading state
   userStore.subscribe(value => {
-    user = value;
+    if (browser) {
+      // Only update loading state once we have a definitive user value
+      isLoading = false;
+    }
   });
-
-  onMount(async () => {
-    await userStore.initialize();
-  });
-
-  async function handleLogout() {
-    api.logout();
-    userStore.clearUser();
-    window.location.href = '/';
-  }
 
   function handleKeyDown(event) {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -29,60 +24,64 @@
   }
 </script>
 
-<div class="navbar bg-base-100/50 backdrop-blur fixed top-0 z-50">
-  <div class="flex-1">
+<div class="navbar bg-base-100/50 backdrop-blur fixed top-0 z-50 border-b border-cyber-primary/20">
+  <div class="navbar-start">
     <a href="/" class="btn btn-ghost text-xl">
-      <span class="text-primary">Buzz<span class="text-secondary">!</span></span>
+      <span class="text-cyber-primary">BUZZ!</span>
     </a>
   </div>
-
-  <div class="flex-none gap-2">
-    {#if user}
-      <div class="dropdown dropdown-end">
-        <button 
-          type="button"
-          class="btn btn-ghost"
-          aria-haspopup="menu"
-          aria-expanded="false"
-        >
-          <div class="flex items-center space-x-2">
-            <span class="hidden md:inline">{user.nickname}</span>
-            <div class="avatar placeholder">
-              <div class="bg-neutral text-neutral-content rounded-full w-8">
-                <span class="text-xs" aria-hidden="true">{user.nickname.charAt(0).toUpperCase()}</span>
+  
+  <div class="navbar-end">
+    {#if !isLoading}
+      {#if $userStore}
+        <div class="dropdown dropdown-end">
+          <label tabindex="0" class="btn btn-ghost">
+            <div class="flex items-center space-x-2">
+              <span class="text-cyber-accent">{$userStore.nickname}</span>
+              <div class="avatar placeholder">
+                <div class="bg-neutral text-neutral-content rounded-full w-8">
+                  <span class="text-xs" aria-hidden="true">{$userStore.nickname.charAt(0).toUpperCase()}</span>
+                </div>
               </div>
             </div>
-          </div>
-        </button>
-        <div 
-          role="menu" 
-          class="mt-3 p-2 shadow menu menu-compact dropdown-content bg-base-100 rounded-box w-52"
-        >
-          <a 
-            href="/profile" 
-            role="menuitem" 
-            class="block px-4 py-2 hover:bg-base-200 rounded"
+          </label>
+          <ul 
+            tabindex="0" 
+            class="menu dropdown-content z-[1] p-2 shadow bg-base-100 rounded-box w-52 mt-4"
+            role="menu"
           >
-            Profile
-          </a>
-          <button 
-            type="button"
-            role="menuitem"
-            class="block w-full text-left px-4 py-2 hover:bg-base-200 rounded"
-            on:click={handleLogout}
-          >
-            Logout
-          </button>
+            <li role="none">
+              <a 
+                href="/profile" 
+                role="menuitem" 
+                class="block px-4 py-2 hover:bg-base-200 rounded"
+              >
+                Profile
+              </a>
+            </li>
+            <li role="none">
+              <button 
+                class="block w-full text-left px-4 py-2 hover:bg-base-200 rounded text-error" 
+                role="menuitem"
+                on:click={() => {
+                  userStore.logout();
+                  window.location.href = '/';
+                }}
+              >
+                Logout
+              </button>
+            </li>
+          </ul>
         </div>
-      </div>
-    {:else}
-      <button
-        type="button"
-        class="btn btn-primary btn-sm"
-        on:click={() => showAuthModal = true}
-      >
-        Login
-      </button>
+      {:else}
+        <button
+          type="button"
+          class="btn btn-primary"
+          on:click={() => showAuthModal = true}
+        >
+          Login
+        </button>
+      {/if}
     {/if}
   </div>
 </div>
