@@ -53,7 +53,7 @@ db.games.insertMany([
             "Mansion": "/static/images/spyfall_locations/mansion.webp",
             "Military Base": "/static/images/spyfall_locations/military_base.webp",
             "Movie Studio": "/static/images/spyfall_locations/movie_studio.webp",
-            "Museum": "/static/images/spyfall_locations/mseum.webp",
+            "Museum": "/static/images/spyfall_locations/museum.webp",
             "Oasis": "/static/images/spyfall_locations/oasis.webp",
             "Ocean Liner": "/static/images/spyfall_locations/ocean_liner.webp",
             "Opera House": "/static/images/spyfall_locations/opera.webp",
