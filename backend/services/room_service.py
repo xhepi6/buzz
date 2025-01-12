@@ -177,28 +177,13 @@ class RoomService:
             updated_room = await RoomService.get_room(room_code)
             logger.debug("Room after join: %s", updated_room.model_dump())
             
-            # Broadcast update after successful join
-            await manager.broadcast_to_lobby(
+            # Broadcast update after successful join using unified broadcast
+            await manager.broadcast(
                 room_code,
                 {
                     "type": "room_update",
-                    "event": "player_joined",
                     "room": updated_room.model_dump(),
-                    "timestamp": datetime.now().isoformat(),
-                    "players": [
-                        {
-                            "user_id": p.user_id,
-                            "nickname": p.nickname,
-                            "state": p.state,
-                            "is_host": p.user_id == updated_room.host
-                        }
-                        for p in updated_room.players
-                    ],
-                    "player": {
-                        "user_id": str(user.id),
-                        "nickname": user.nickname,
-                        "state": "not_ready"
-                    }
+                    "timestamp": datetime.now().isoformat()
                 }
             )
             return updated_room
@@ -238,28 +223,13 @@ class RoomService:
             # Get updated room
             updated_room = await RoomService.get_room(room_code)
             
-            # Direct broadcast instead of using broadcast_room_update
-            await manager.broadcast_to_lobby(
+            # Broadcast using unified system
+            await manager.broadcast(
                 room_code,
                 {
                     "type": "room_update",
-                    "event": "player_ready_changed",
                     "room": updated_room.model_dump(),
-                    "timestamp": datetime.now().isoformat(),
-                    "players": [
-                        {
-                            "user_id": p.user_id,
-                            "nickname": p.nickname,
-                            "state": p.state,
-                            "is_host": p.user_id == updated_room.host
-                        }
-                        for p in updated_room.players
-                    ],
-                    "player": {
-                        "user_id": str(user.id),
-                        "nickname": user.nickname,
-                        "new_state": new_state
-                    }
+                    "timestamp": datetime.now().isoformat()
                 }
             )
             
@@ -301,11 +271,10 @@ class RoomService:
                 # Delete room if empty
                 await mongodb.db.rooms.delete_one({"code": room_code})
                 # Broadcast room deletion
-                await manager.broadcast_to_lobby(
+                await manager.broadcast(
                     room_code,
                     {
-                        "type": "room_update",
-                        "event": "room_deleted",
+                        "type": "room_deleted",
                         "timestamp": datetime.now().isoformat(),
                         "room_code": room_code
                     }
@@ -320,27 +289,13 @@ class RoomService:
                 )
                 updated_room = await RoomService.get_room(room_code)
             
-            # Broadcast player left update
-            await manager.broadcast_to_lobby(
+            # Broadcast using unified system
+            await manager.broadcast(
                 room_code,
                 {
                     "type": "room_update",
-                    "event": "player_left",
                     "room": updated_room.model_dump(),
-                    "timestamp": datetime.now().isoformat(),
-                    "players": [
-                        {
-                            "user_id": p.user_id,
-                            "nickname": p.nickname,
-                            "state": p.state,
-                            "is_host": p.user_id == updated_room.host
-                        }
-                        for p in updated_room.players
-                    ],
-                    "player": {
-                        "user_id": str(user.id),
-                        "nickname": user.nickname
-                    }
+                    "timestamp": datetime.now().isoformat()
                 }
             )
             
@@ -353,7 +308,7 @@ class RoomService:
     @staticmethod
     async def start_game(room_code: str, user: User) -> Room:
         try:
-            logger.info("Starting game for room %s", room_code)
+            logger.info("Starting game in room %s", room_code)
             room = await RoomService.get_room(room_code)
             if not room:
                 raise ValueError("Room not found")
@@ -406,41 +361,16 @@ class RoomService:
                 raise ValueError("Failed to update room state")
             
             logger.info("Broadcasting game start for room %s", room_code)
-            # Broadcast game started to all players
-            await manager.broadcast_to_lobby(
+            # Broadcast game started to all players with game state
+            await manager.broadcast(
                 room_code,
                 {
                     "type": "game_started",
                     "game_type": room.game_type,
-                    "room_code": room.code
+                    "room_code": room.code,
+                    "game_state": game_state
                 }
             )
-            
-            logger.info("Sending individual role information")
-            # Send individual role information
-            players_to_notify = mafia_players if room.game_type == "mafia" else spyfall_players
-            for player in players_to_notify:
-                try:
-                    role_info = player.role_info.model_dump()
-                    # Only convert to value if it's an Enum
-                    if role_info and role_info.get('role'):
-                        role_info['role'] = role_info['role'].value
-                        
-                    logger.info("  -> Sending role to %s: %s", player.nickname, role_info)
-                    await manager.send_to_user(
-                        room_code,
-                        player.user_id,
-                        {
-                            "type": "game_update",
-                            "event": "role_assigned",
-                            "player_id": player.user_id,
-                            "role_info": role_info
-                        },
-                        'lobby'  # Send through lobby connection since game connection isn't established yet
-                    )
-                except Exception as e:
-                    logger.error("Error sending role to %s: %s", player.nickname, str(e))
-                    raise
             
             return await RoomService.get_room(room_code)
             
