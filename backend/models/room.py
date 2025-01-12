@@ -43,10 +43,32 @@ class MafiaConfig(BaseModel):
 class RoomCreate(BaseModel):
     game_type: str
     num_players: int
-    game_config: Dict[str, Any]  # Keep this flexible for different game types
+    game_config: Dict[str, Any]
 
     def validate_mafia_config(self):
         if self.game_type == "mafia":
             if not isinstance(self.game_config.get("roles"), dict):
                 raise ValueError("Mafia game requires roles configuration")
-            # Add more validation as needed
+            
+            roles = self.game_config["roles"]
+            total_players = (
+                roles.get("mafia", 0) +
+                roles.get("civilian", 0) +
+                roles.get("doctor", 0) +
+                roles.get("police", 0)
+            )
+            
+            # Validate minimum players
+            if total_players < 4:
+                raise ValueError("Mafia game requires at least 4 players")
+            
+            # Validate role distribution
+            if roles.get("mafia", 0) < 1:
+                raise ValueError("At least 1 mafia required")
+            if roles.get("civilian", 0) < 2:
+                raise ValueError("At least 2 civilians required")
+            
+            # Validate special roles for small games
+            if total_players <= 5:
+                if roles.get("doctor", 0) > 0 or roles.get("police", 0) > 0:
+                    raise ValueError("Special roles not recommended for games with 5 or fewer players")

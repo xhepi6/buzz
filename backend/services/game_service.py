@@ -1,27 +1,29 @@
 from typing import List, Optional
-from bson.objectid import ObjectId
-from core.mongodb import mongodb
 from models.game import Game
+from core.mongodb import mongodb
 
 class GameService:
     @staticmethod
     async def get_games(category: Optional[str] = None) -> List[Game]:
-        query = {"category": category} if category else {}
-        cursor = mongodb.db.games.find(query)
-        games = []
-        async for doc in cursor:
-            games.append(Game.model_validate(doc))
-        return games
+        query = {}
+        if category:
+            query["category"] = category
+        games = await mongodb.db.games.find(query).to_list(length=None)
+        return [Game(**game) for game in games]
 
     @staticmethod
     async def get_game(game_id: str) -> Optional[Game]:
-        try:
-            game_doc = await mongodb.db.games.find_one({"_id": ObjectId(game_id)})
-            return Game.model_validate(game_doc) if game_doc else None
-        except Exception as e:
-            print(f"Error getting game: {e}")
-            return None
+        game = await mongodb.db.games.find_one({"_id": game_id})
+        if game:
+            return Game(**game)
+        return None
 
     @staticmethod
     async def get_categories() -> List[str]:
-        return await mongodb.db.games.distinct("category")
+        categories = await mongodb.db.games.distinct("category")
+        return categories
+
+    @staticmethod
+    async def get_featured_games() -> List[Game]:
+        featured_games = await mongodb.db.games.find({"featured": True}).to_list(length=None)
+        return [Game(**game) for game in featured_games]
