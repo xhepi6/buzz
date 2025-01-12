@@ -6,24 +6,29 @@ A modern web application for social gaming, built with FastAPI (backend) and Sve
 ```
 buzz/
 ├── backend/
-│   ├── app/
-│   │   ├── api/         # API endpoints
-│   │   ├── core/        # Core configurations
-│   │   ├── models/      # Pydantic models
-│   │   ├── services/    # Business logic
-│   │   └── static/      # Static files
-│   ├── scripts/         # Utility scripts
-│   └── requirements.txt # Python dependencies
+│   ├── api/          # API endpoints
+│   ├── core/         # Core configurations
+│   ├── models/       # Pydantic models
+│   ├── services/     # Business logic
+│   ├── static/       # Static files
+│   ├── main.py      # FastAPI application
+│   └── requirements.txt
 ├── frontend/
-│   ├── src/            # SvelteKit source code
-│   ├── static/         # Static assets
-│   ├── package.json    # Node.js dependencies
+│   ├── src/
+│   │   ├── lib/     # Shared components and utilities
+│   │   │   ├── components/
+│   │   │   ├── stores/
+│   │   │   └── api.js
+│   │   └── routes/  # SvelteKit pages
+│   ├── static/      # Static assets
+│   ├── package.json
+│   ├── svelte.config.js
 │   ├── tailwind.config.js
 │   └── vite.config.js
 ├── docker/
 │   ├── backend.Dockerfile
 │   ├── frontend.Dockerfile
-│   └── mongo-init.js   # MongoDB initialization script
+│   └── mongo-init.js
 └── docker-compose.yaml
 ```
 
