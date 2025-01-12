@@ -117,10 +117,10 @@ export const api = {
 
   getGameState: async (roomId) => fetchApi(`/rooms/${roomId}/state`),
 
-  getWebSocketUrl: (roomId) => {
+  getWebSocketUrl: (roomId, type = 'lobby') => {
     const wsProtocol = API_BASE_URL.startsWith('https') ? 'wss:' : 'ws:';
     const apiUrl = new URL(API_BASE_URL);
-    return `${wsProtocol}//${apiUrl.host}/ws/${roomId}`;
+    return `${wsProtocol}//${apiUrl.host}/ws/${type}/${roomId}`;
   },
 
   toggleReady: async (roomId) => fetchApi(`/rooms/${roomId}/ready`, {
@@ -136,6 +136,13 @@ export const api = {
 
   startGame: async (code) => {
     const response = await fetchApi(`/rooms/${code}/start`, {
+        method: 'POST'
+    });
+    return response;
+  },
+
+  restartGame: async (code) => {
+    const response = await fetchApi(`/rooms/${code}/restart`, {
         method: 'POST'
     });
     return response;

@@ -12,16 +12,18 @@ function createWebsocketStore() {
     let ws = null;
     let reconnectTimer = null;
     let currentRoomId = null;
-    let messageHandler = null; // Store the message handler
+    let messageHandler = null;
+    let connectionType = 'lobby';
 
-    return {
+    const store = {
         subscribe,
-        connect: async (roomId) => {
+        connect: async (roomId, type = 'lobby') => {
             currentRoomId = roomId;
+            connectionType = type;
             const token = localStorage.getItem('token');
-            const wsUrl = `${api.getWebSocketUrl(roomId)}?token=${token}`;
+            const wsUrl = `${api.getWebSocketUrl(roomId, type)}?token=${token}`;
             
-            console.log('🔌 Attempting WebSocket connection to:', wsUrl);
+            console.log(`🔌 Attempting ${type} WebSocket connection to:`, wsUrl);
             
             return new Promise((resolve, reject) => {
                 ws = new WebSocket(wsUrl);
@@ -32,10 +34,9 @@ function createWebsocketStore() {
 
                 ws.onopen = () => {
                     clearTimeout(timeout);
-                    console.log('🔌 WebSocket connected successfully');
+                    console.log(`🔌 ${type} WebSocket connected successfully`);
                     update(store => ({ ...store, connected: true, error: null }));
                     
-                    // Set message handler after connection if one was provided
                     if (messageHandler && ws) {
                         ws.onmessage = messageHandler;
                     }
@@ -55,7 +56,7 @@ function createWebsocketStore() {
                 };
                 
                 ws.onclose = (event) => {
-                    console.log('🔌 WebSocket closed:', {
+                    console.log(`🔌 ${type} WebSocket closed:`, {
                         code: event.code,
                         reason: event.reason,
                         wasClean: event.wasClean
@@ -66,7 +67,7 @@ function createWebsocketStore() {
                         console.log('🔄 Scheduling reconnection attempt...');
                         reconnectTimer = setTimeout(() => {
                             console.log('🔄 Attempting to reconnect...');
-                            this.connect(currentRoomId);
+                            store.connect(currentRoomId, connectionType);
                         }, 5000);
                     }
                 };
@@ -77,6 +78,7 @@ function createWebsocketStore() {
             console.log('🔌 Disconnecting WebSocket...');
             currentRoomId = null;
             messageHandler = null;
+            connectionType = 'lobby';
             
             if (reconnectTimer) {
                 clearTimeout(reconnectTimer);
@@ -93,11 +95,23 @@ function createWebsocketStore() {
         },
         
         setMessageHandler: (handler) => {
-            // Create wrapper for the message handler
             messageHandler = (event) => {
                 try {
                     const data = JSON.parse(event.data);
                     console.log('📨 WebSocket message received:', data);
+                    
+                    if (data.type === 'game_started') {
+                        console.log('🎮 Game started, switching to game connection...');
+                        const gameType = data.game_type;
+                        const roomCode = data.room_code;
+                        
+                        // Switch to game connection
+                        store.disconnect();
+                        store.connect(roomCode, 'game').then(() => {
+                            window.location.href = `/games/${gameType}/${roomCode}`;
+                        });
+                        return;
+                    }
                     
                     if (data.type === 'room_update') {
                         update(store => ({
@@ -117,7 +131,6 @@ function createWebsocketStore() {
                 }
             };
             
-            // If we already have a connection, set the handler immediately
             if (ws) {
                 ws.onmessage = messageHandler;
             } else {
@@ -125,6 +138,8 @@ function createWebsocketStore() {
             }
         }
     };
+
+    return store;
 }
 
 export const websocketStore = createWebsocketStore(); 
