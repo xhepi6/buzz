@@ -38,6 +38,8 @@
     aria-labelledby="modal-title"
     aria-modal="true"
     on:click={handleOverlayClick}
+    on:keydown={handleEscape}
+    tabindex="-1"
   >
     <!-- Modal -->
     <div 

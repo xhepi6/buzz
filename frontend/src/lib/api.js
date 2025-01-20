@@ -14,11 +14,14 @@ async function fetchApi(endpoint, options = {}) {
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      if (response.status === 404) {
-        throw new Error('Room not found. Please check the room code and try again.');
+      if (response.status === 401) {
+        throw new Error('401: Incorrect email or password');
       }
-      throw new Error(error.detail || 'An error occurred');
+      if (response.status === 404) {
+        throw new Error('404: Resource not found');
+      }
+      const error = await response.json();
+      throw new Error(error.detail || `${response.status}: An error occurred`);
     }
 
     return await response.json();
@@ -30,14 +33,21 @@ async function fetchApi(endpoint, options = {}) {
 
 export const api = {
   login: async (email, password) => {
-    const formData = new URLSearchParams({ username: email, password });
+    const formData = new URLSearchParams();
+    formData.append('username', email);
+    formData.append('password', password);
+    
     const response = await fetchApi('/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: formData,
     });
-    localStorage.setItem('token', response.access_token);
-    return response;
+    
+    if (response.access_token) {
+      localStorage.setItem('token', response.access_token);
+      return response;
+    }
+    throw new Error('Invalid response from server');
   },
 
   register: async (email, password, fullName, nickname) => {

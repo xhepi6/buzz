@@ -40,12 +40,19 @@
       if (isLogin) {
         await userStore.login(email, password);
       } else {
+        if (!fullName || !nickname) {
+          throw new Error('All fields are required');
+        }
         await userStore.register(email, password, fullName, nickname);
       }
       
       onClose();
     } catch (err) {
-      error = err.message || 'An error occurred';
+      if (err.message.includes('401')) {
+        error = 'Incorrect email or password';
+      } else {
+        error = err.message || 'An error occurred during authentication';
+      }
       console.error('Auth error:', err);
     } finally {
       isLoading = false;

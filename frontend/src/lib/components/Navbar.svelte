@@ -35,7 +35,7 @@
     {#if !isLoading}
       {#if $userStore}
         <div class="dropdown dropdown-end">
-          <label tabindex="0" class="btn btn-ghost">
+          <button type="button" class="btn btn-ghost">
             <div class="flex items-center space-x-2">
               <span class="text-cyber-accent">{$userStore.nickname}</span>
               <div class="avatar placeholder">
@@ -44,7 +44,7 @@
                 </div>
               </div>
             </div>
-          </label>
+          </button>
           <ul 
             tabindex="0" 
             class="menu dropdown-content z-[1] p-2 shadow bg-base-100 rounded-box w-52 mt-4"

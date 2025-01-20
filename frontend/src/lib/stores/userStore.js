@@ -55,6 +55,12 @@ function createUserStore() {
             set(user);
             return response;
         },
+        register: async (email, password, fullName, nickname) => {
+            const response = await api.register(email, password, fullName, nickname);
+            const user = await api.getCurrentUser();
+            set(user);
+            return response;
+        },
         logout: () => {
             if (browser) {
                 localStorage.removeItem('token');
